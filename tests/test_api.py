@@ -213,3 +213,71 @@ def test_generate_daily_uses_memory(mocker):
     assert len(posts) == 2
     assert all(p["status"] == "scheduled" for p in posts)
     assert any(p["is_ai_generated"] for p in posts)
+
+
+def test_daily_falls_back_to_trends_evergreen(mocker):
+    import app.services.ai as _ai_mod
+    import app.services.trends as _tr_mod
+
+    from app.config import get_settings
+
+    settings = get_settings()
+    mocker.patch.object(settings, "daily_topics", "")
+    mocker.patch.object(settings, "max_posts_per_day", 2)
+
+    mocker.patch.object(
+        _tr_mod.trends, "daily_candidates", return_value=["praia trend", "serra trend"]
+    )
+    evergreen = mocker.patch.object(
+        _ai_mod.ai_service, "to_evergreen_topics",
+        return_value=["Destino Trend A", "Destino Trend B"],
+    )
+
+    fake = {
+        "title": "Guia",
+        "meta_title": "Guia",
+        "meta_description": "desc",
+        "summary": "resumo",
+        "content": "# T\n\n" + "\n\n".join(f"Parágrafo {j} útil." for j in range(12)),
+        "keywords": ["k1"],
+        "tags": ["t1"],
+        "image_prompt": "img",
+        "facts": {},
+    }
+
+    def fake_gen(topic, category=None, language=None, target_audience=None):
+        base = dict(fake)
+        base["title"] = f"Guia de {topic}"
+        return base
+
+    mocker.patch.object(_ai_mod.ai_service, "settings", SimpleNamespace(ai_api_key="k", ai_model="m"))
+    mocker.patch.object(_ai_mod.ai_service, "generate_travel_post", side_effect=fake_gen)
+
+    r = client.post("/generate/daily", headers={"Authorization": "Bearer teste123"})
+    assert r.status_code == 200, r.text
+    posts = r.json()
+    assert evergreen.called
+    assert len(posts) == 2
+    assert {p["title"] for p in posts} == {
+        "Guia de Destino Trend A",
+        "Guia de Destino Trend B",
+    }
+
+
+def test_trends_falls_back_to_seed(mocker, tmp_path):
+    import app.services.trends as _tr_mod
+
+    svc = _tr_mod.trends
+    orig_path = svc.path
+    orig_data = svc.data
+    svc.path = str(tmp_path / "cache.json")
+    svc.data = {}
+    mocker.patch.object(svc, "_google_trends", return_value=[])
+    mocker.patch.object(svc, "_news", return_value=[])
+    try:
+        candidates = svc.daily_candidates()
+    finally:
+        svc.path = orig_path
+        svc.data = orig_data
+    assert candidates
+    assert any("lençóis" in c.lower() for c in candidates)

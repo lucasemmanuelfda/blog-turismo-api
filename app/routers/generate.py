@@ -10,6 +10,7 @@ from app.routers.deps import require_admin
 from app.services.ai import ai_service
 from app.services.images import image_urls, insert_images
 from app.services.memory import memory
+from app.services.trends import SEED_TOPICS as SEED_TOPICS_FALLBACK, trends
 
 router = APIRouter(prefix="/generate", tags=["generate"])
 
@@ -84,6 +85,28 @@ def generate_post(
     )
 
 
+def _topics_of_the_day() -> list[str]:
+    """Temas do dia: fila configurada (DAILY_TOPICS) ou tendências → evergreen."""
+    settings = get_settings()
+
+    queued = memory.queue_topics()
+    if queued:
+        return queued
+
+    candidates = trends.daily_candidates()
+    evergreen = ai_service.to_evergreen_topics(
+        candidates, count=settings.max_posts_per_day + 3
+    )
+    fresh = [t for t in evergreen if memory._key(t) not in set(memory.data["topics"])]
+    return fresh or evergreen or SEED_TOPICS_FALLBACK
+
+
+@router.get("/topics", response_model=list[str])
+def topics_preview(_: None = Depends(require_admin)):
+    """Mostra os temas que seriam gerados hoje (não gera nada)."""
+    return _topics_of_the_day()
+
+
 @router.post("/daily", response_model=list[schemas.PostRead])
 def generate_daily(
     count: int | None = None,
@@ -91,7 +114,11 @@ def generate_daily(
     db: Session = Depends(get_db),
     _: None = Depends(require_admin),
 ):
-    """Gera artigos diários para temas ainda não cobertos e agenda a publicação."""
+    """Gera artigos diários para temas ainda não cobertos e agenda a publicação.
+
+    Temas: preferencialmente a fila DAILY_TOPICS; senão, Google Trends do dia
+    transformado pela IA em tópicos evergreen (atemporais).
+    """
     if not ai_service.available:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -99,13 +126,7 @@ def generate_daily(
         )
 
     settings = get_settings()
-    topics = memory.queue_topics() or [
-        "praias do nordeste",
-        "serra fluminense",
-        "caminhos rurais do sul",
-        "vilas históricas de minas",
-        "ecoturismo na amazônia",
-    ]
+    topics = _topics_of_the_day()
     limit = min(count or settings.max_posts_per_day, settings.max_posts_per_day)
     posts: list[models.Post] = []
     now = datetime.utcnow()

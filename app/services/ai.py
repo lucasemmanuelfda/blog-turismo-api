@@ -101,6 +101,29 @@ segurança e perguntas frequentes ao final.
         raw = response.choices[0].message.content or "{}"
         return self._parse_json(raw)
 
+    def to_evergreen_topics(self, candidates: list[str], count: int = 12) -> list[str]:
+        """Converte termos de tendência em temas de viagem evergreen."""
+        if not candidates:
+            return []
+        prompt = (
+            "Você é o editor de um blog de turismo brasileiro. A partir destes termos "
+            "do Google Trends, crie temas de viagem EVERGREEN (atemporais, úteis por "
+            "anos): destinos, roteiros ou atividades. Regras:\n"
+            "- Exclua notícias, eventos com data, política, acidentes e preços do momento.\n"
+            "- Seja específico (ex.: 'Chapada dos Veadeiros no verão' em vez de 'viagem').\n"
+            "- Não repita destinados já óbvios demais; prefira títulos que gerem busca no Google.\n"
+            "Termos de tendência:\n"
+            + "\n".join(f"- {c}" for c in candidates[:30])
+            + f"\n\nRetorne {count} temas em pt-BR apenas como JSON: "
+            '{"topics": ["...", "..."]}'
+        )
+        response = self._create(
+            user_prompt=prompt,
+            system_prompt="Você é um editor de blog de turismo. Responda apenas com JSON válido.",
+        )
+        raw = response.choices[0].message.content or "[]"
+        return self._parse_string_list(raw)
+
     def _create(self, user_prompt: str, system_prompt: str) -> Any:
         """Tenta o provedor principal (3x); se falhar, usa o reserva (Groq)."""
         try:
@@ -165,6 +188,30 @@ segurança e perguntas frequentes ao final.
         if not data["content"] or len(data["content"]) < 300:
             data["content"] = self._fallback_markdown(data["title"] or "título")
         return data
+
+    @staticmethod
+    def _parse_string_list(raw: str) -> list[str]:
+        """Extrai uma lista de strings de uma resposta JSON (array ou {"topics": [...]})."""
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            match = re.search(r"\[.*\]", raw, re.DOTALL)
+            if not match:
+                return []
+            try:
+                data = json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return []
+        if isinstance(data, dict):
+            for value in data.values():
+                if isinstance(value, list):
+                    data = value
+                    break
+            else:
+                return []
+        if isinstance(data, list):
+            return [str(x).strip() for x in data if str(x).strip()]
+        return []
 
     @staticmethod
     def _fallback_markdown(title: str, min_words: int = 800) -> str:

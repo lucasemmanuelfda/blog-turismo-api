@@ -6,4 +6,5 @@ pydantic>=2.7
 pydantic-settings>=2.3
 apscheduler>=3.10
 openai>=1.40
+pytrends>=4.9,<5
 python-multipart

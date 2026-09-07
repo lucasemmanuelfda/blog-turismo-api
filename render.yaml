@@ -31,3 +31,7 @@ services:
         value: "10"
       - key: MAX_POSTS_PER_DAY
         value: "5"
+      - key: TRENDS_COUNTRY
+        value: BR
+      - key: NEWS_API_KEY
+        sync: false

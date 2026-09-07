@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     memory_file: str = "blog-memory.json"
     # Temas usados na geração diária automática (separados por vírgula)
     daily_topics: str = ""
+    # Lista de temas escolhida dinamicamente por tendências (cache diário)
+    topics_cache_file: str = "trends-cache.json"
+    # Google Trends: país usado na consulta (BR, US, PT, AR, ...)
+    trends_country: str = "BR"
+    # Reserva de tendências: chave grátis do NewsAPI.org (se Google Trends bloquear)
+    news_api_key: str = ""
 
 
 @lru_cache
