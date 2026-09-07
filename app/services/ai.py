@@ -14,17 +14,29 @@ class AIService:
 
     def __init__(self) -> None:
         self.settings = get_settings()
-        kwargs: dict[str, Any] = {
-            "api_key": self.settings.ai_api_key or "sk-nokey",
-            "timeout": 90,
-        }
-        if self.settings.ai_base_url:
-            kwargs["base_url"] = self.settings.ai_base_url
-        self.client = OpenAI(**kwargs)
+        self.client = OpenAI(
+            api_key=self.settings.ai_api_key or "sk-nokey",
+            base_url=(self.settings.ai_base_url or "https://api.openai.com/v1"),
+            timeout=90,
+        )
+        self.fallback_client: OpenAI | None = None
+        if self.settings.ai_fallback_api_key and self.settings.ai_fallback_base_url:
+            self.fallback_client = OpenAI(
+                api_key=self.settings.ai_fallback_api_key,
+                base_url=self.settings.ai_fallback_base_url,
+                timeout=90,
+            )
 
     @property
     def available(self) -> bool:
         return bool(self.settings.ai_api_key and self.settings.ai_model)
+
+    @property
+    def fallback_available(self) -> bool:
+        return bool(
+            self.fallback_client
+            and self.settings.ai_fallback_model
+        )
 
     def _model(self) -> str:
         return self.settings.ai_model or "gpt-4o-mini"
@@ -90,13 +102,29 @@ segurança e perguntas frequentes ao final.
         return self._parse_json(raw)
 
     def _create(self, user_prompt: str, system_prompt: str) -> Any:
+        """Tenta o provedor principal (3x); se falhar, usa o reserva (Groq)."""
+        try:
+            return self._try_chat(self.client, self.settings.ai_model, user_prompt, system_prompt)
+        except Exception as first:
+            if not self.fallback_available:
+                raise
+            try:
+                return self._try_chat(
+                    self.fallback_client, self.settings.ai_fallback_model, user_prompt, system_prompt
+                )
+            except Exception:
+                raise first
+
+    def _try_chat(
+        self, client: OpenAI, model: str, user_prompt: str, system_prompt: str
+    ) -> Any:
         """Chama a IA com até 3 tentativas, aguardando entre falhas (503/limite)."""
         attempts = 3
         delay = 4
         for attempt in range(attempts):
             try:
-                return self.client.chat.completions.create(
-                    model=self._model(),
+                return client.chat.completions.create(
+                    model=model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},

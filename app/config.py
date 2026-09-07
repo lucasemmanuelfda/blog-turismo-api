@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     ai_model: str = ""
     ai_language: str = "pt-BR"
 
+    # Provedor reserva (ex.: Groq grátis) usado quando o principal falha
+    ai_fallback_base_url: str = ""
+    ai_fallback_api_key: str = ""
+    ai_fallback_model: str = ""
+
     publish_interval_minutes: int = 10
     max_posts_per_day: int = 5
 

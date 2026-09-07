@@ -131,6 +131,49 @@ def test_generate_requires_config(mocker):
     assert r.status_code == 503, r.text
 
 
+def test_fallback_uses_groq_when_primary_fails(mocker):
+    from types import SimpleNamespace as _SN
+
+    from app.services import ai as ai_module
+
+    _json_content = '{"title":"T","meta_title":"T","meta_description":"d","summary":"s","content":"' + ("x" * 400) + '","keywords":["a"],"tags":["b"]}'
+
+    class FakeMsg:
+        content = _json_content
+
+    class FakeChoice:
+        message = FakeMsg()
+
+    class FakeResp:
+        choices = [FakeChoice()]
+
+    def boom(**kw):
+        raise RuntimeError("primario fora")
+
+    def grok_ok(**kw):
+        return FakeResp()
+
+    fake_primary = _SN(chat=_SN(completions=_SN(create=mocker.Mock(side_effect=boom))))
+    fake_fallback = _SN(chat=_SN(completions=_SN(create=mocker.Mock(side_effect=grok_ok))))
+
+    fake_settings = _SN(
+        ai_model="g", ai_fallback_model="f", ai_api_key="k", ai_base_url="u",
+        ai_fallback_api_key="x", ai_fallback_base_url="y", ai_language="pt-BR",
+    )
+    mocker.patch.object(ai_module, "time", mocker.Mock(sleep=mocker.Mock()))
+    orig = (ai_module.ai_service.client, ai_module.ai_service.fallback_client, ai_module.ai_service.settings)
+    ai_module.ai_service.client = fake_primary
+    ai_module.ai_service.fallback_client = fake_fallback
+    ai_module.ai_service.settings = fake_settings
+    try:
+        out = ai_module.ai_service.generate_travel_post("topico")
+    finally:
+        (ai_module.ai_service.client, ai_module.ai_service.fallback_client,
+         ai_module.ai_service.settings) = orig
+    assert out["title"] == "T"
+    assert fake_fallback.chat.completions.create.called
+
+
 def test_generate_daily_uses_memory(mocker):
     from app.services import ai as ai_module
 
