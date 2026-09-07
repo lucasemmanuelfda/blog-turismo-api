@@ -289,13 +289,16 @@ def test_images_never_use_lorem_placeholder(mocker):
     from app.services.images import image_urls
 
     mocker.patch.object(get_settings(), "validate_images", True)
-    mocker.patch("app.services.images._valid_lorem", return_value=False)
+
+    mocker.patch("app.services.images._commons", return_value=[])
     urls = image_urls("gramado", n=3)
     assert len(urls) == 3
-    assert all("loremflickr" not in u for u in urls)
     assert all("picsum.photos" in u for u in urls)
 
-    mocker.patch.object(get_settings(), "validate_images", True)
-    mocker.patch("app.services.images._valid_lorem", return_value=True)
-    urls_ok = image_urls("gramado", n=1)
-    assert "loremflickr.com/1024/576/gramado" in urls_ok[0]
+    mocker.patch(
+        "app.services.images._commons",
+        return_value=[f"https://thumb.wikimedia.org/t{i}.jpg" for i in range(1, 4)],
+    )
+    urls_ok = image_urls("gramado", n=3)
+    assert len(urls_ok) == 3
+    assert all("wikimedia.org" in u for u in urls_ok)
