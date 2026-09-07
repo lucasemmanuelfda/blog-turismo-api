@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from typing import Any
 
 from openai import OpenAI
@@ -83,18 +84,30 @@ onde comer, onde se hospedar, como chegar, custos aproximados, dicas de
 segurança e perguntas frequentes ao final.
 """.strip()
 
-        response = self.client.chat.completions.create(
-            model=self._model(),
-            messages=[
-                {"role": "system", "content": self._system_prompt(lang)},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.7,
-            response_format={"type": "json_object"},
-        )
+        response = self._create(user_prompt=user_prompt, system_prompt=self._system_prompt(lang))
 
         raw = response.choices[0].message.content or "{}"
         return self._parse_json(raw)
+
+    def _create(self, user_prompt: str, system_prompt: str) -> Any:
+        """Chama a IA com até 3 tentativas, aguardando entre falhas (503/limite)."""
+        attempts = 3
+        delay = 4
+        for attempt in range(attempts):
+            try:
+                return self.client.chat.completions.create(
+                    model=self._model(),
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.7,
+                    response_format={"type": "json_object"},
+                )
+            except Exception:
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(delay * (attempt + 1))
 
     def _parse_json(self, raw: str) -> dict[str, Any]:
         try:

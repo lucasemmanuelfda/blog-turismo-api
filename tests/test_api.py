@@ -15,6 +15,10 @@ from app.services.memory import memory  # noqa: E402
 Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 
+if os.path.exists("test_memory.json"):
+    os.remove("test_memory.json")
+memory.data = {"topics": {}}
+
 client = TestClient(app)
 
 
