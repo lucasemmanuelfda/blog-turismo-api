@@ -27,7 +27,7 @@
 <main id="list"><p id="msg">Carregando…</p></main>
 
 <script>
-const API = new URLSearchParams(location.search).get("api") || "https://SEU-APP.onrender.com";
+const API = new URLSearchParams(location.search).get("api") || "https://blog-turismo-api.onrender.com";
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
