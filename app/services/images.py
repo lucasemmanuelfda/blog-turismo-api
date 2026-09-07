@@ -1,10 +1,36 @@
+import urllib.request
 from urllib.parse import quote
 
+from app.config import get_settings
 
-def image_urls(topic: str, n: int = 3, width: int = 1024, height: int = 576) -> list[str]:
-    """n imagens free da internet (LoremFlickr) 16:9 por tema, estáveis via lock."""
-    keyword = quote((topic.strip() or "travel").split()[0].lower())
-    return [f"https://loremflickr.com/{width}/{height}/{keyword}?lock={i}" for i in range(1, n + 1)]
+WIDTH, HEIGHT = 1024, 576
+
+
+def _valid_lorem(url: str) -> bool:
+    """Só considera a foto real do LoremFlickr; ignora o placeholder 'X vermelho'."""
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(req, timeout=15) as r:
+            final = r.geturl()
+            content_type = r.headers.get("Content-Type", "")
+            return "defaultImage" not in final and content_type.startswith("image/")
+    except Exception:
+        return False
+
+
+def _source(keyword: str, variant: int) -> str:
+    fallback = f"https://picsum.photos/seed/{quote(keyword)}-{variant}/{WIDTH}/{HEIGHT}"
+    lorem = f"https://loremflickr.com/{WIDTH}/{HEIGHT}/{quote(keyword)}?lock={variant}"
+    if not get_settings().validate_images or _valid_lorem(lorem):
+        return lorem
+    return fallback
+
+
+def image_urls(topic: str, n: int = 3, width: int = WIDTH, height: int = HEIGHT) -> list[str]:
+    """n imagens 16:9 por tema: LoremFlickr (relacionada ao tema) ou Picsum
+    como garantia — nunca um placeholder vazio/vermelho."""
+    keyword = quote((topic.strip() or "travel").split()[0].lower() or "travel")
+    return [_source(keyword, i) for i in range(1, n + 1)]
 
 
 def insert_images(content: str, urls: list[str]) -> tuple[str, str]:

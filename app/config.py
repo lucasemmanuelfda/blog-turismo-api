@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     trends_country: str = "BR"
     # Reserva de tendências: chave grátis do NewsAPI.org (se Google Trends bloquear)
     news_api_key: str = ""
+    # Valida as imagens antes de salvar (troca por fallback se não houver foto)
+    validate_images: bool = True
 
 
 @lru_cache

@@ -5,6 +5,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./test_blog.db")
 os.environ.setdefault("ADMIN_KEY", "teste123")
 os.environ.setdefault("MEMORY_FILE", "test_memory.json")
 os.environ.setdefault("DAILY_TOPICS", "Destino A,Destino B")
+os.environ.setdefault("VALIDATE_IMAGES", "false")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -281,3 +282,20 @@ def test_trends_falls_back_to_seed(mocker, tmp_path):
         svc.data = orig_data
     assert candidates
     assert any("lençóis" in c.lower() for c in candidates)
+
+
+def test_images_never_use_lorem_placeholder(mocker):
+    from app.config import get_settings
+    from app.services.images import image_urls
+
+    mocker.patch.object(get_settings(), "validate_images", True)
+    mocker.patch("app.services.images._valid_lorem", return_value=False)
+    urls = image_urls("gramado", n=3)
+    assert len(urls) == 3
+    assert all("loremflickr" not in u for u in urls)
+    assert all("picsum.photos" in u for u in urls)
+
+    mocker.patch.object(get_settings(), "validate_images", True)
+    mocker.patch("app.services.images._valid_lorem", return_value=True)
+    urls_ok = image_urls("gramado", n=1)
+    assert "loremflickr.com/1024/576/gramado" in urls_ok[0]
