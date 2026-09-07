@@ -8,6 +8,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.routers.deps import require_admin
 from app.services.ai import ai_service
+from app.services.images import image_urls, insert_images
 from app.services.memory import memory
 
 router = APIRouter(prefix="/generate", tags=["generate"])
@@ -24,12 +25,13 @@ def _to_post(db: Session, topic: str, category_name: str | None, scheduled_at: d
     )
 
     slug = crud.generate_slug(db, data["title"])
+    content, cover = insert_images(data["content"], image_urls(topic))
     post = crud.create_post(
         db,
         schemas.PostCreate(
             title=data["title"],
             summary=data["summary"],
-            content=data["content"],
+            content=content,
             status="scheduled" if scheduled_at else "draft",
             scheduled_at=scheduled_at,
             keywords=data["keywords"],
@@ -40,7 +42,7 @@ def _to_post(db: Session, topic: str, category_name: str | None, scheduled_at: d
         ),
     )
     post.slug = slug
-    post.image_prompt = data.get("image_prompt", "")
+    post.cover_image = cover or data.get("image_prompt", "")
     post.is_ai_generated = True
     db.commit()
     db.refresh(post)
