@@ -4,4 +4,4 @@ __pycache__/
 .env
 blog.db
 *.db
-.pytest_cache/
+.pytest_cache/test_memory.json
