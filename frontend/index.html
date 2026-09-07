@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blog Turismo IA</title>
+<meta name="description" content="Dicas, roteiros e destinos de turismo gerados com IA.">
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 860px; margin: 0 auto; padding: 16px; }
+  h1 { margin-bottom: 4px; }
+  header p { color: #666; margin-top: 0; }
+  .post { border: 1px solid #ccc; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .post h2 { margin: 0 0 4px; }
+  .meta { color: #666; font-size: .85em; margin-bottom: 8px; }
+  .post .content { display: none; }
+  .post.open .content { display: block; }
+  a.more { cursor: pointer; color: #06c; }
+  #msg { color: #c00; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Blog Turismo IA</h1>
+  <p>Destinos, roteiros e dicas de viagem.</p>
+</header>
+<main id="list"><p id="msg">Carregando…</p></main>
+
+<script>
+const API = new URLSearchParams(location.search).get("api") || "https://SEU-APP.onrender.com";
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function load() {
+  const list = document.getElementById("list");
+  try {
+    const res = await fetch(API + "/posts?status=published&limit=30");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const posts = await res.json();
+    if (!posts.length) {
+      list.innerHTML = "<p>Ainda não há artigos publicados.</p>";
+      return;
+    }
+    document.title = posts[0].meta_title || document.title;
+    list.innerHTML = posts.map(p => `
+      <article class="post" id="${esc(p.slug)}">
+        <h2>${esc(p.title)}</h2>
+        <div class="meta">${esc((p.tags || []).map(t => "#" + t).join(" · "))}</div>
+        <p>${esc(p.summary)}</p>
+        <a class="more" onclick="this.parentElement.classList.toggle('open')">Ler mais</a>
+        <div class="content">${md(p.content)}</div>
+      </article>`).join("");
+  } catch (e) {
+    document.getElementById("msg").textContent = "Erro ao carregar: " + e.message;
+  }
+}
+
+function md(text) {
+  let s = esc(text);
+  s = s.replace(/^### (.*)$/gm, "<h3>$1</h3>").replace(/^## (.*)$/gm, "<h2>$1</h2>")
+       .replace(/^# (.*)$/gm, "<h1>$1</h1>")
+       .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+       .replace(/^\s*[-*]\s+/gm, "• ").replace(/\n/g, "<br>");
+  return s;
+}
+load();
+</script>
+</body>
+</html>

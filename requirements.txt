@@ -1,0 +1,9 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+pydantic>=2.7
+pydantic-settings>=2.3
+apscheduler>=3.10
+openai>=1.40
+python-multipart

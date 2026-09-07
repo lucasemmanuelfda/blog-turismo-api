@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: blog-turismo-api
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: ADMIN_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: AI_BASE_URL
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        sync: false
+      - key: AI_LANGUAGE
+        value: pt-BR
+      - key: PUBLISH_INTERVAL_MINUTES
+        value: "10"
+      - key: MAX_POSTS_PER_DAY
+        value: "5"
