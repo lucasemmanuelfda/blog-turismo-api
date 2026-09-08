@@ -1,9 +1,12 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app import crud, schemas
+from app import crud, models, schemas
 from app.database import get_db
 from app.routers.deps import require_admin
+from app.services.images import add_attribution, image_urls, insert_images
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
@@ -61,6 +64,26 @@ def publish_post(
     post = crud.publish_post(db, post_id)
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post não encontrado")
+    return post
+
+
+@router.post("/{post_id}/refresh-images", response_model=schemas.PostRead)
+def refresh_images(post_id: int, db: Session = Depends(get_db), _: None = Depends(require_admin)):
+    """Substitui as imagens do post por fotos válidas (Wikimedia Commons) e ajusta o crédito."""
+    post = db.get(models.Post, post_id)
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post não encontrado")
+
+    topic = f"{post.title}" if not post.category else f"{post.title} {post.category}"
+    urls = image_urls(topic)
+    content = re.sub(r"!\[[^\]]*\]\((?:https?:\/\/[^)\s]+)\)", "", post.content or "")
+    content = "\n".join(line for line in content.split("\n") if line.strip())
+    content, _ = insert_images(content, urls)
+    content = add_attribution(content, urls)
+    post.content = content
+    post.cover_image = urls[0] if urls else post.cover_image
+    db.commit()
+    db.refresh(post)
     return post
 
 

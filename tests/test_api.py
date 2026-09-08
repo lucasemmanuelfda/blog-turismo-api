@@ -302,3 +302,32 @@ def test_images_never_use_lorem_placeholder(mocker):
     urls_ok = image_urls("gramado", n=3)
     assert len(urls_ok) == 3
     assert all("wikimedia.org" in u for u in urls_ok)
+
+
+def test_refresh_images_and_attribution(mocker):
+    from app.config import get_settings
+    from app.services.images import add_attribution
+
+    mocker.patch.object(get_settings(), "validate_images", True)
+    content = "texto\n\n![antiga](https://loremflickr.com/1200/600/x?lock=1)\n\nmais texto"
+    mocker.patch(
+        "app.services.images._commons",
+        return_value=[f"https://thumb.wikimedia.org/f{i}.jpg" for i in range(1, 4)],
+    )
+    r = client.post(
+        "/posts",
+        json={"title": "Post para imagens", "summary": "s", "content": content},
+        headers={"Authorization": "Bearer teste123"},
+    )
+    assert r.status_code == 201, r.text
+    pid = r.json()["id"]
+
+    r = client.post(f"/posts/{pid}/refresh-images",
+                    headers={"Authorization": "Bearer teste123"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "loremflickr" not in body["content"]
+    assert "Fotos: Wikimedia Commons" in body["content"]
+    assert "wikimedia.org" in (body["cover_image"] or "")
+
+    assert "Fotos: Wikimedia Commons" not in add_attribution("x", ["https://picsum.photos/a.jpg"])

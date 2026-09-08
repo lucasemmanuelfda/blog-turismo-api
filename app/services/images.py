@@ -1,4 +1,5 @@
 import json
+import re
 import urllib.parse
 import urllib.request
 from urllib.parse import quote
@@ -6,6 +7,8 @@ from urllib.parse import quote
 from app.config import get_settings
 
 WIDTH, HEIGHT = 1200, 600
+
+ATTRIBUTION = "*Fotos: Wikimedia Commons.*"
 
 # Impede hotlink externo de adicionar margens (o padrão do LoremFlickr) e
 # garante fotos reais: Wikimedia Commons redimensiona proporcionalmente,
@@ -75,3 +78,11 @@ def insert_images(content: str, urls: list[str]) -> tuple[str, str]:
             out.append(f"![{alt}]({urls[inserted]})")
             inserted += 1
     return "\n".join(out), urls[0]
+
+
+def add_attribution(content: str, urls: list[str]) -> str:
+    """Adiciona (ou remove) o crédito das fotos conforme a fonte usada."""
+    content = re.sub(r"\n*\*Fotos: Wikimedia Commons\.?\*", "\n", content).strip("\n")
+    if any("wikimedia.org" in (url or "") for url in urls):
+        return content + "\n\n" + ATTRIBUTION
+    return content

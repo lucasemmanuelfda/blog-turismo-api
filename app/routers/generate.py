@@ -8,7 +8,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.routers.deps import require_admin
 from app.services.ai import ai_service
-from app.services.images import image_urls, insert_images
+from app.services.images import add_attribution, image_urls, insert_images
 from app.services.memory import memory
 from app.services.trends import SEED_TOPICS as SEED_TOPICS_FALLBACK, trends
 
@@ -26,7 +26,9 @@ def _to_post(db: Session, topic: str, category_name: str | None, scheduled_at: d
     )
 
     slug = crud.generate_slug(db, data["title"])
-    content, cover = insert_images(data["content"], image_urls(topic))
+    urls = image_urls(topic)
+    content, cover = insert_images(data["content"], urls)
+    content = add_attribution(content, urls)
     post = crud.create_post(
         db,
         schemas.PostCreate(
