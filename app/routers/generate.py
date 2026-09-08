@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
@@ -15,7 +15,13 @@ from app.services.trends import SEED_TOPICS as SEED_TOPICS_FALLBACK, trends
 router = APIRouter(prefix="/generate", tags=["generate"])
 
 
-def _to_post(db: Session, topic: str, category_name: str | None, scheduled_at: datetime | None) -> models.Post:
+def _to_post(
+    db: Session,
+    topic: str,
+    category_name: str | None,
+    scheduled_at: datetime | None,
+    provider: str = "auto",
+) -> models.Post:
     category: models.Category | None = None
     if category_name:
         category = crud.get_or_create_category(db, category_name)
@@ -23,6 +29,7 @@ def _to_post(db: Session, topic: str, category_name: str | None, scheduled_at: d
     data = ai_service.generate_travel_post(
         topic=topic,
         category=category.name if category else "geral",
+        provider=provider,
     )
 
     slug = crud.generate_slug(db, data["title"])
@@ -57,6 +64,7 @@ def _to_post(db: Session, topic: str, category_name: str | None, scheduled_at: d
 @router.post("/post", response_model=schemas.GenerateResponse, status_code=status.HTTP_201_CREATED)
 def generate_post(
     request: schemas.GenerateRequest,
+    provider: str = Query("auto", pattern="^(auto|primary|fallback)$"),
     db: Session = Depends(get_db),
     _: None = Depends(require_admin),
 ):
@@ -64,6 +72,11 @@ def generate_post(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Geração de conteúdo por IA não configurada. Defina AI_API_KEY e AI_MODEL no ambiente.",
+        )
+    if provider == "fallback" and not ai_service.fallback_available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Provedor reserva (Groq) não configurado no ambiente.",
         )
 
     category_name = None
@@ -74,7 +87,7 @@ def generate_post(
         category_name = category.name
 
     try:
-        post = _to_post(db, request.topic, category_name, request.scheduled_at)
+        post = _to_post(db, request.topic, category_name, request.scheduled_at, provider)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

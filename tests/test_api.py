@@ -175,6 +175,44 @@ def test_fallback_uses_groq_when_primary_fails(mocker):
     assert fake_fallback.chat.completions.create.called
 
 
+def test_generate_forces_fallback_provider(mocker):
+    from types import SimpleNamespace as _SN
+
+    from app.services import ai as ai_module
+
+    _json_content = '{"title":"Groq","meta_title":"Groq","meta_description":"d","summary":"s","content":"' + ("g" * 400) + '","keywords":["a"],"tags":["b"]}'
+
+    class FakeMsg:
+        content = _json_content
+
+    class FakeChoice:
+        message = FakeMsg()
+
+    class FakeResp:
+        choices = [FakeChoice()]
+
+    fake_primary = _SN(chat=_SN(completions=_SN(create=mocker.Mock())))
+    fake_fallback = _SN(
+        chat=_SN(completions=_SN(create=mocker.Mock(return_value=FakeResp())))
+    )
+    fake_settings = _SN(
+        ai_model="g", ai_fallback_model="f", ai_api_key="k", ai_base_url="u",
+        ai_fallback_api_key="x", ai_fallback_base_url="y", ai_language="pt-BR",
+    )
+    orig = (ai_module.ai_service.client, ai_module.ai_service.fallback_client, ai_module.ai_service.settings)
+    ai_module.ai_service.client = fake_primary
+    ai_module.ai_service.fallback_client = fake_fallback
+    ai_module.ai_service.settings = fake_settings
+    try:
+        out = ai_module.ai_service.generate_travel_post("topico", provider="fallback")
+    finally:
+        (ai_module.ai_service.client, ai_module.ai_service.fallback_client,
+         ai_module.ai_service.settings) = orig
+    assert out["title"] == "Groq"
+    assert not fake_primary.chat.completions.create.called
+    assert fake_fallback.chat.completions.create.called
+
+
 def test_generate_daily_uses_memory(mocker):
     from app.services import ai as ai_module
 
@@ -198,7 +236,7 @@ def test_generate_daily_uses_memory(mocker):
 
     first = True
 
-    def fake_gen(topic, category=None, language=None, target_audience=None):
+    def fake_gen(topic, category=None, language=None, target_audience=None, provider="auto"):
         nonlocal first
         i = 1 if first else 2
         first = False
@@ -246,7 +284,7 @@ def test_daily_falls_back_to_trends_evergreen(mocker):
         "facts": {},
     }
 
-    def fake_gen(topic, category=None, language=None, target_audience=None):
+    def fake_gen(topic, category=None, language=None, target_audience=None, provider="auto"):
         base = dict(fake)
         base["title"] = f"Guia de {topic}"
         return base

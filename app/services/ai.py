@@ -77,6 +77,7 @@ Regras obrigatórias:
         category: str | None = None,
         language: str | None = None,
         target_audience: str | None = None,
+        provider: str = "auto",
     ) -> dict[str, Any]:
         lang = language or self.settings.ai_language
         audience = target_audience or "viajantes em geral"
@@ -96,7 +97,11 @@ onde comer, onde se hospedar, como chegar, custos aproximados, dicas de
 segurança e perguntas frequentes ao final.
 """.strip()
 
-        response = self._create(user_prompt=user_prompt, system_prompt=self._system_prompt(lang))
+        response = self._create(
+            user_prompt=user_prompt,
+            system_prompt=self._system_prompt(lang),
+            provider=provider,
+        )
 
         raw = response.choices[0].message.content or "{}"
         return self._parse_json(raw)
@@ -124,13 +129,20 @@ segurança e perguntas frequentes ao final.
         raw = response.choices[0].message.content or "[]"
         return self._parse_string_list(raw)
 
-    def _create(self, user_prompt: str, system_prompt: str) -> Any:
-        """Tenta o provedor principal (3x); se falhar, usa o reserva (Groq)."""
+    def _create(self, user_prompt: str, system_prompt: str, provider: str = "auto") -> Any:
+        """Provedor principal (default), reserva forçada ou fallback automático."""
+        if provider == "fallback":
+            if not self.fallback_available:
+                raise ValueError("Provedor reserva (fallback) não configurado")
+            return self._try_chat(
+                self.fallback_client, self.settings.ai_fallback_model, user_prompt, system_prompt
+            )
+
         try:
             return self._try_chat(self.client, self.settings.ai_model, user_prompt, system_prompt)
         except Exception as first:
-            if not self.fallback_available:
-                raise
+            if not self.fallback_available or provider == "primary":
+                raise first
             try:
                 return self._try_chat(
                     self.fallback_client, self.settings.ai_fallback_model, user_prompt, system_prompt
