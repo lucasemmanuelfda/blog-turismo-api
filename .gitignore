@@ -6,3 +6,4 @@ blog.db
 *.db
 .pytest_cache/test_memory.json
 trends-cache.json
+.wrangler/
