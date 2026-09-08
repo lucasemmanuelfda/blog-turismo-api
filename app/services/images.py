@@ -31,8 +31,12 @@ def _commons(keyword: str, n: int) -> list[str]:
         }
     )
     url = "https://commons.wikimedia.org/w/api.php?" + params
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "BlogTurismoAPI/1.0 (https://github.com/lucasemmanuelfda/blog-turismo-api)"},
+    )
     try:
-        with urllib.request.urlopen(url, timeout=20) as r:
+        with urllib.request.urlopen(request, timeout=20) as r:
             payload = json.loads(r.read().decode("utf-8"))
         pages = (payload.get("query") or {}).get("pages") or {}
         out: list[str] = []
