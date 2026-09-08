@@ -11,6 +11,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Blog Turismo IA</title>
 <meta name="description" content="Dicas, roteiros e destinos de turismo gerados com IA.">
+<meta name="robots" content="index, follow">
 <style>
   :root {
     --bg: #f4f6f9;
@@ -94,14 +95,25 @@
   .content a { color: var(--accent); }
   #msg { text-align: center; color: var(--muted); padding: 40px 0; }
   footer { text-align: center; color: var(--muted); font-size: .85em; padding: 0 16px 40px; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .skip-link { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+  .skip-link:focus {
+    left: 8px; top: 8px; width: auto; height: auto; z-index: 999;
+    background: var(--card); color: var(--text); padding: 10px 16px;
+    border-radius: 8px; box-shadow: var(--shadow); font-weight: 600;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
+<a class="skip-link" href="#list">Pular para o conteúdo principal</a>
 <header class="hero">
   <h1>Blog Turismo IA</h1>
   <p>Destinos, roteiros e dicas de viagem.</p>
 </header>
-<main id="list"><p id="msg">Carregando…</p></main>
+<main id="list"><p id="msg" aria-live="polite">Carregando…</p></main>
 <footer>Conteúdo informativo gerado automaticamente todos os dias.</footer>
 
 <script>
@@ -152,7 +164,7 @@ async function load() {
       return;
     }
     document.title = posts[0].meta_title || document.title;
-    list.innerHTML = posts.map(p => `
+    list.innerHTML = posts.map((p, idx) => `
       <article class="post" id="${esc(p.slug)}">
         ${p.cover_image ? '<img class="cover" loading="lazy" src="' + esc(p.cover_image) + '" alt="' + esc(p.title) + '" onerror="this.onerror=null;this.src=\'https://picsum.photos/seed/cover-\'+encodeURIComponent(this.alt)+\'/1024/576\';" >' : ""}
         <div class="post-body">
@@ -160,14 +172,16 @@ async function load() {
           <h2>${esc(p.title)}</h2>
           <div class="meta">${p.category ? esc(p.category) + " · " : ""}<span class="tags">${esc((p.tags || []).map(t => "#" + t).join("  "))}</span></div>
           <p class="summary">${esc(p.summary)}</p>
-          <button class="more">Ler mais</button>
-          <div class="content">${md(p.content)}</div>
+          <button class="more" aria-expanded="false" aria-controls="content-${idx}">Ler mais</button>
+          <div class="content" id="content-${idx}" hidden>${md(p.content)}</div>
         </div>
       </article>`).join("");
     list.querySelectorAll(".post").forEach(card => {
       card.querySelector(".more").addEventListener("click", () => {
-        card.classList.toggle("open");
-        card.querySelector(".more").textContent = card.classList.contains("open") ? "Fechar" : "Ler mais";
+        const open = card.classList.toggle("open");
+        card.querySelector(".content").hidden = !open;
+        card.querySelector(".more").textContent = open ? "Fechar" : "Ler mais";
+        card.querySelector(".more").setAttribute("aria-expanded", String(open));
       });
     });
   } catch (e) {
