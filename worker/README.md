@@ -16,15 +16,32 @@ Acessibilidade: link "pular para o conteúdo", `lang=pt-BR`, landmarks semântic
 `alt` nas imagens (decorativas com `role="presentation"`), contraste adaptado ao
 tema escuro e suporte a `prefers-reduced-motion`.
 
-## Substituir no painel da Cloudflare
+## Deploy
 
-1. Abra **https://dash.cloudflare.com** → **Workers & Pages**.
-2. Clique no Worker que serve o site (cujo domínio é `blog-turismo-api.lucasemmanuel2005.workers.dev`).
-3. **Edit code** → apague o conteúdo atual → cole todo o conteúdo de `worker/worker.js`.
-4. Confirme que a constante `API_BASE_URL` aponta para a sua API (padrão: `https://blog-turismo-api.onrender.com`).
-5. Clique em **Deploy**.
+### CI (automático, recomendado)
 
-Pronto: `/`, `/sitemap.xml`, `/robots.txt` e `/post/<slug>/` passam a existir.
+O workflow `.github/workflows/deploy-worker.yml` roda em todo push que altere
+`worker/**` ou `wrangler.toml` (e pode ser disparado manualmente em **Actions**).
+Ele roda `node worker/test-worker.mjs` e publica com o Wrangler.
+
+Para ativar, crie 2 secrets em
+**GitHub → Settings → Secrets and variables → Actions**:
+
+| Secret | Valor |
+|---|---|
+| `CLOUDFLARE_ACCOUNT_ID` | ID da sua conta (ex.: `SUA_CONTA_CLOUDFLARE`; veja no URL do painel `dash.cloudflare.com/<account_id>/...`) |
+| `CLOUDFLARE_API_TOKEN` | My Profile → **API Tokens** → template **"Edit Cloudflare Workers"** (scope na sua conta) |
+
+### Local (uma vez)
+
+Na raiz do repositório (`wrangler.toml` aponta para `worker/worker.js`):
+
+```bash
+npx wrangler login   # só na primeira vez (abre o navegador)
+npx wrangler deploy
+```
+
+Independente do método, o resultado são as rotas:
 
 ## Testar localmente (Node)
 
@@ -47,9 +64,23 @@ worker/
 
 ## Pós-publicação (indexação Google)
 
-Depois de colar o worker:
+### Verificação do Search Console
 
-1. Acesse **Google Search Console** → adicione seu domínio e envie `https://<seu-domínio>/sitemap.xml`.
+Use **URL prefix** (tipo "Domain" não funciona em `*.workers.dev`). Faça a verificação
+pelo método **HTML tag**: o GSC exibe `<meta name="google-site-verification"
+content="SEU_TOKEN"/>`; então:
+
+1. Abra `worker/worker.js` e preencha a constante
+   `GOOGLE_SITE_VERIFICATION = "SEU_TOKEN";` (no alto do arquivo).
+2. Deploy (CI ou Wrangler) — a meta é emitida no `<head>` de todas as páginas.
+3. Clique em **Verify** no GSC.
+
+Cada `/google<hex>.html` também é servido automaticamente (método "arquivo HTML"),
+caso prefira.
+
+### Após a verificação
+
+1. No GSC → **Sitemaps**, envie `https://<seu-domínio>/sitemap.xml`.
 2. Peça o recrawl de `https://<seu-domínio>/robots.txt`.
 3. Para aceitar IA: se usar **Cloudflare AI Gateway** ou bloquear bots de IA, libere
    `GPTBot`, `ClaudeBot`, `PerplexityBot`, `Google-Extended` (o `User-agent: *` já permite todos).
