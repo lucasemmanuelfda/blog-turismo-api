@@ -26,7 +26,7 @@ services:
       - key: AI_FALLBACK_API_KEY
         sync: false
       - key: AI_FALLBACK_MODEL
-        value: llama-3.3-70b-versatile
+        value: openai/gpt-oss-120b
       - key: PUBLISH_INTERVAL_MINUTES
         value: "10"
       - key: MAX_POSTS_PER_DAY
