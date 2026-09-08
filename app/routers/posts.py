@@ -10,6 +10,29 @@ from app.services.images import add_attribution, image_urls, insert_images
 
 router = APIRouter(prefix="/posts", tags=["posts"])
 
+_STOPWORDS = {
+    "de", "do", "da", "dos", "das", "e", "o", "a", "os", "as", "em", "no",
+    "na", "para", "com", "um", "uma", "u", "guia", "roteiro", "como",
+    "sobre", "ms", "sp", "rj", "mg", "sc", "rs", "pr", "ba", "pe", "pa",
+    "go", "mt", "dias", "ano", "anos",
+}
+
+
+def _image_keyword(post: models.Post) -> str:
+    """Descobre a palavra-chave de imagens: URL antiga do post, depois título."""
+    from app.services.images import _commons
+
+    old = re.search(r"loremflickr\.com/\d+/\d+/([^/?]+)", post.content or "")
+    if old and _commons(old.group(1), 1):
+        return old.group(1)
+    words = re.sub(r"[^a-z0-9\s]", " ", (post.title or "").lower()).split()
+    for word in words[::-1]:
+        if word.isdigit() or word in _STOPWORDS or len(word) < 3:
+            continue
+        if _commons(word, 1):
+            return word
+    return words[-1] if words else (post.title or "travel")
+
 
 @router.get("", response_model=list[schemas.PostRead])
 def list_posts(
@@ -68,13 +91,18 @@ def publish_post(
 
 
 @router.post("/{post_id}/refresh-images", response_model=schemas.PostRead)
-def refresh_images(post_id: int, db: Session = Depends(get_db), _: None = Depends(require_admin)):
+def refresh_images(
+    post_id: int,
+    keyword: str | None = None,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+):
     """Substitui as imagens do post por fotos válidas (Wikimedia Commons) e ajusta o crédito."""
     post = db.get(models.Post, post_id)
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post não encontrado")
 
-    topic = f"{post.title}" if not post.category else f"{post.title} {post.category}"
+    topic = keyword or _image_keyword(post)
     urls = image_urls(topic)
     content = re.sub(r"!\[[^\]]*\]\((?:https?:\/\/[^)\s]+)\)", "", post.content or "")
     content = "\n".join(line for line in content.split("\n") if line.strip())
