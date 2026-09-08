@@ -15,6 +15,9 @@ _STOPWORDS = {
     "na", "para", "com", "um", "uma", "u", "guia", "roteiro", "como",
     "sobre", "ms", "sp", "rj", "mg", "sc", "rs", "pr", "ba", "pe", "pa",
     "go", "mt", "dias", "ano", "anos",
+    "completo", "completa", "pratico", "pratica", "ideal", "melhores",
+    "melhor", "perfeito", "tudo", "toda", "veja", "saiba", "aprenda",
+    "viajar", "viagem", "destinos", "dicas", "especial",
 }
 
 
@@ -25,7 +28,7 @@ def _image_keyword(post: models.Post) -> str:
     old = re.search(r"loremflickr\.com/\d+/\d+/([^/?]+)", post.content or "")
     if old and _commons(old.group(1), 1):
         return old.group(1)
-    words = re.sub(r"[^a-z0-9\s]", " ", (post.title or "").lower()).split()
+    words = re.sub(r"[^a-z0-9\s]", "", (post.title or "").lower()).split()
     for word in words[::-1]:
         if word.isdigit() or word in _STOPWORDS or len(word) < 3:
             continue
