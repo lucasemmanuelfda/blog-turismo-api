@@ -33,6 +33,11 @@ function esc(s) {
 // Não usamos window (não existe no Worker).
 const SITE_ORIGIN = "https://blog-turismo-api.lucasemmanuel2005.workers.dev";
 
+// Token de verificação do Google Search Console (método "HTML tag").
+// Preencher com o content da meta gerada pelo GSC, ex.: "ab12cd34ef56ab78",
+// e config para publicar no <head>: <meta name="google-site-verification" content="ab12cd34ef56ab78">
+const GOOGLE_SITE_VERIFICATION = "5r8Ci2K7Dr-x1L1pogJ4qXrXxTQHxzURb2w9djRXs0o";
+
 function originOfUrl(u) {
   try {
     const nu = new URL(u);
@@ -124,11 +129,15 @@ function page(t) {
     (t.post && t.post.cover_image ? cleanImageUrl(t.post.cover_image) : "");
   const canonical = t.canonical || t.origin + "/";
   const robotsMeta = t.robots ? `<meta name="robots" content="${t.robots}">` : "";
+  const gscMeta = GOOGLE_SITE_VERIFICATION
+    ? `<meta name="google-site-verification" content="${esc(GOOGLE_SITE_VERIFICATION)}">`
+    : "";
   return `<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+${gscMeta}
 <title>${esc(t.title)}</title>
 <meta name="description" content="${esc(t.desc)}">
 <link rel="canonical" href="${esc(canonical)}">
@@ -337,6 +346,16 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     const origin = url.origin;
+
+    // Verificação do Google Search Console (URL prefix, método "arquivo HTML").
+    // O GSC pede o arquivo /google<hex>.html contendo "google-site-verification: <nome do arquivo>".
+    // Como o token É o nome do arquivo, servimos qualquer googleXXXX.html automaticamente.
+    if (/^\/google[0-9a-f]{8,64}\.html$/.test(path)) {
+      const filename = path.slice(1); // ex.: googlea1b2c3d4e5f6a7b8.html
+      return new Response(`google-site-verification: ${filename}\n`, {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
 
     // Robots.txt
     if (path === "/robots.txt") {

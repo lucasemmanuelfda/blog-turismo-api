@@ -94,6 +94,12 @@ async function run() {
   check("robots user-agent", rob.includes("User-agent: *"));
   check("robots sitemap", rob.includes("Sitemap: " + SITE + "/sitemap.xml"));
 
+  // verificação do Google Search Console (URL prefix / arquivo HTML)
+  const gRes = await worker.fetch({ url: SITE + "/googlea1b2c3d4e5f6a7b8.html" }, {}, {});
+  const gBody = await gRes.text();
+  check("gsc 200", gRes.status === 200);
+  check("gsc body", gBody.trim() === "google-site-verification: googlea1b2c3d4e5f6a7b8.html");
+
   // sitemap.xml
   const smRes = await worker.fetch({ url: SITE + "/sitemap.xml" }, {}, {});
   const sm = await smRes.text();
