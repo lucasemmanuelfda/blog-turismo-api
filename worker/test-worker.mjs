@@ -101,6 +101,9 @@ async function run() {
   check("post toc link", post.includes('href="#por-que-visitar">Por que visitar</a>'));
   check("post progress bar", post.includes('class="progress"'));
   check("post layout center stage", post.includes('class="layout"'));
+  check("post kit afiliado", post.includes('class="kit"'));
+  check("post kit tag amazon", post.includes("tag=blogturismo20-20"));
+  check("post kit disclosure", post.includes("afiliado da Amazon"));
 
   const tagRes = await worker.fetch({ url: SITE + "/tag/gramado/" }, {}, {});
   const tag = await tagRes.text();

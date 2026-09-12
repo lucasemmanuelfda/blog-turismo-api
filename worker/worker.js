@@ -291,6 +291,11 @@ a { color:var(--accent); }
 .content li { margin:.35em 0; }
 .content strong { font-weight:700; }
 code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em; border-radius:6px; font-size:.9em; }
+.kit { margin:2.2em 0 0; padding:20px 22px; border:1px solid var(--line); border-radius:var(--radius); background:var(--card); box-shadow:var(--shadow); }
+.kit h2 { font-size:1.12rem; letter-spacing:-.2px; margin:0 0 .4em; }
+.kit p { color:var(--muted); font-size:.88em; line-height:1.6; margin:0; }
+.kit ul { padding-left:1.2em; margin:.7em 0 0; }
+.kit li { margin:.45em 0; }
 .footer { text-align:center; color:var(--muted); font-size:.85em; padding:0 18px 44px; }
 .footer a { color:var(--muted); text-decoration:none; border-bottom:1px dotted var(--muted); }
 .sr { position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden; }
@@ -440,6 +445,30 @@ ${hero}
   );
 }
 
+const AMAZON_TAG = "blogturismo20-20";
+
+const KIT_ITEMS = [
+  ["Sapatilha aquática de neoprene", "ideal para flutuação e trilhas com água", "sapato aquático neoprene"],
+  ["Mochila de trilha", "leve e resistente para os passeios do dia", "mochila de trilha leve"],
+  ["Capinha à prova d'água para celular", "fotos sem risco nas lagoas e cachoeiras", "capa celular à prova d'água"],
+];
+
+function amazonSearchLink(query) {
+  return `https://www.amazon.com.br/s?k=${encodeURIComponent(query)}&tag=${AMAZON_TAG}`;
+}
+
+function kitHtml() {
+  const items = KIT_ITEMS.map(
+    ([name, note, query]) =>
+      `<li><a rel="nofollow noopener" href="${amazonSearchLink(query)}">${esc(name)}</a> — ${esc(note)}</li>`
+  ).join("");
+  return `<section class="kit" aria-label="Links de afiliado da Amazon">
+  <h2>Kit recomendado para suas viagens</h2>
+  <p>Alguns links desta página são de afiliado da Amazon. Se você comprar por eles, o blog ganha uma pequena comissão sem custo extra para você.</p>
+  <ul>${items}</ul>
+</section>`;
+}
+
 async function postPage(request, origin, slug) {
   const post = await fetchPost(slug);
   if (!post) {
@@ -477,6 +506,7 @@ async function postPage(request, origin, slug) {
           ${tocHtml}
           <div class="content">${content}</div>
         </div>
+        ${kitHtml()}
       </div>
     </article>`;
   return new Response(
