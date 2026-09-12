@@ -96,7 +96,7 @@ function mdToHtml(md) {
       })
       .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.+?)\*/g, "<em>$1</em>")
-      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, t, href) => `<a href="${esc(href)}">${esc(t)}</a>`);
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, t, href) => `<a href="${esc(href)}" rel="nofollow noopener">${esc(t)}</a>`);
 
   while (i < lines.length) {
     const l = lines[i];
