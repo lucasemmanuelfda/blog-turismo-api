@@ -106,6 +106,8 @@ async function run() {
   check("sitemap xml header", sm.startsWith("<?xml"));
   check("sitemap home loc", sm.includes("<loc>" + SITE + "/</loc>"));
   check("sitemap post loc", sm.includes(`<loc>${SITE}/post/roteiro-de-3-dias-em-gramado/</loc>`));
+  check("sitemap lastmod YYYY-MM-DD", /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/.test(sm));
+  check("sitemap lastmod sem horario", !/T\d{2}/.test(sm));
 
   process.exit(failures ? 1 : 0);
 }

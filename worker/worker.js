@@ -28,6 +28,14 @@ function esc(s) {
     .replace(/'/g, "&#39;");
 }
 
+// Google só aceita lastmod em YYYY-MM-DD (ou datetime W3C com fuso).
+// A API devolve "2026-09-08T00:36:38.597165" (sem fuso); normalizamos para a data.
+function sitemapDate(s) {
+  if (!s) return "";
+  const m = String(s).match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : "";
+}
+
 // Guarda só o esquema+host para montar URLs absolutas (canonical / og:url)
 // origin fixo de referência (apenas para construir URLs absolutas de schema.org).
 // Não usamos window (não existe no Worker).
@@ -372,7 +380,7 @@ Sitemap: ${origin}/sitemap.xml
       try {
         const posts = await fetchPosts();
         for (const p of posts) {
-          links += `<url><loc>${origin}/post/${esc(p.slug)}/</loc><lastmod>${p.updated_at || p.published_at || ""}</lastmod></url>`;
+          links += `<url><loc>${origin}/post/${esc(p.slug)}/</loc><lastmod>${sitemapDate(p.updated_at || p.published_at)}</lastmod></url>`;
         }
       } catch (e) {
         // sitemap vazio se API indisponível
