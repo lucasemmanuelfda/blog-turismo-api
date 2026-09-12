@@ -29,7 +29,7 @@ Para ativar, crie 2 secrets em
 
 | Secret | Valor |
 |---|---|
-| `CLOUDFLARE_ACCOUNT_ID` | ID da sua conta (ex.: `SUA_CONTA_CLOUDFLARE`; veja no URL do painel `dash.cloudflare.com/<account_id>/...`) |
+| `CLOUDFLARE_ACCOUNT_ID` | ID da sua conta (veja no URL do painel `dash.cloudflare.com/<account_id>/...`) |
 | `CLOUDFLARE_API_TOKEN` | My Profile → **API Tokens** → template **"Edit Cloudflare Workers"** (scope na sua conta) |
 
 ### Local (uma vez)
