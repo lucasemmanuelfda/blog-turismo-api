@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app import crud, models, schemas
 from app.database import get_db
 from app.routers.deps import require_admin
+from app.services.ai import ai_service
 from app.services.images import add_attribution, image_urls, insert_images
 
 router = APIRouter(prefix="/posts", tags=["posts"])
@@ -116,6 +117,20 @@ def refresh_images(
     db.commit()
     db.refresh(post)
     return post
+
+
+@router.post("/{post_id}/kit", response_model=schemas.PostRead)
+def regenerate_kit(
+    post_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+):
+    """Gera um kit personalizado para um post existente via IA (sem reescrever o conteúdo)."""
+    post = db.get(models.Post, post_id)
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post não encontrado")
+    kit = ai_service.generate_kit(post.title)
+    return crud.update_post(db, post_id, schemas.PostUpdate(kit_recommendations=kit))
 
 
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)

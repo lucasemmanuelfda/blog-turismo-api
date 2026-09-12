@@ -120,10 +120,8 @@ def update_post(db: Session, post_id: int, data: schemas.PostUpdate) -> models.P
     for field, value in data.model_dump(exclude_unset=True).items():
         if not hasattr(post, field):
             continue
-        if field in ("keywords", "tags"):
+        if field in ("keywords", "tags", "kit_recommendations"):
             value = serialize_list(value or [])
-        if field == "kit_recommendations":
-            value = serialize_list([i.model_dump() for i in (value or [])])
         setattr(post, field, value)
 
     if post.status == "published" and not post.published_at:

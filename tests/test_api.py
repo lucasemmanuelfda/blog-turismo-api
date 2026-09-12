@@ -100,6 +100,32 @@ def test_post_crud():
     assert r.status_code == 204
 
 
+def test_kit_backfill(mocker):
+    import app.services.ai as _ai_mod
+
+    fake_kit = [
+        {"name": "Sapatilha aquática", "note": "ideal para flutuação", "query": "sapatilha aquática"},
+        {"name": "Mochila de trilha", "note": "leve para as trilhas", "query": "mochila de trilha"},
+    ]
+    mocker.patch.object(_ai_mod.ai_service, "generate_kit", return_value=fake_kit)
+
+    r = client.post(
+        "/posts",
+        json={"title": "Guia de Gramado", "summary": "s", "content": "# T\n\n" + ("x" * 350)},
+        headers={"Authorization": "Bearer teste123"},
+    )
+    post_id = r.json()["id"]
+
+    r = client.post(f"/posts/{post_id}/kit", headers={"Authorization": "Bearer teste123"})
+    assert r.status_code == 200, r.text
+    kit = r.json()["kit_recommendations"]
+    assert kit[0]["name"] == "Sapatilha aquática"
+    assert kit[0]["query"] == "sapatilha aquática"
+
+    r = client.post(f"/posts/{post_id}/kit")
+    assert r.status_code == 401
+
+
 def test_generate_uses_ai_service(mocker):
     from app.services import ai as ai_module
 

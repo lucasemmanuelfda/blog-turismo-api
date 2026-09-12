@@ -157,6 +157,28 @@ catálogo de atrações nem tom publicitário.
         raw = response.choices[0].message.content or "{}"
         return self._parse_json(raw)
 
+    def generate_kit(self, topic: str) -> list[dict[str, str]]:
+        """Gera 3 itens de kit recomendado para um destino, sem reescrever o artigo."""
+        if not self.available:
+            return []
+        prompt = (
+            "Sugira 3 produtos de viagem REAIS e genéricos (sem marca, itens físicos compráveis) "
+            "úteis para este tema de post de blog de turismo:\n"
+            f"{topic}\n"
+            f"Cada um com 'name' (curto), 'note' (8-12 palavras: por que é útil aqui) e "
+            f"'query' (termo de busca vago para a Amazon em pt-BR). "
+            f'Responda SOMENTE JSON: {{"kit_recommendations": [{{"name":"...","note":"...","query":"..."}}]}}'
+        )
+        try:
+            response = self._create(
+                user_prompt=prompt,
+                system_prompt="Você é um consultor de compras de viagem. Responda apenas com JSON válido.",
+            )
+            data = json.loads(response.choices[0].message.content or "{}")
+        except Exception:
+            return []
+        return _clean_kit(data.get("kit_recommendations"))
+
     def to_evergreen_topics(self, candidates: list[str], count: int = 12) -> list[str]:
         """Converte termos de tendência em temas de viagem evergreen."""
         if not candidates:
