@@ -17,6 +17,7 @@ Repo público de um blog de turismo com geração de conteúdo por IA.
 python -m uvicorn app.main:app --reload   # dev, http://127.0.0.1:8000/docs
 pytest tests                              # testes da API
 node worker/test-worker.mjs               # testes do worker
+gh workflow run daily-generate.yml        # publica o dia (gera + agenda posts) sem acompanhar — usar sempre
 ```
 
 ## Segurança (repo público)
