@@ -64,6 +64,9 @@ async function run() {
   check("home link artigo", home.includes('/post/roteiro-de-3-dias-em-gramado/'));
   check("home skip link", home.includes('Pular para o conteúdo principal'));
   check("home imagem role presentation", /role="presentation"/.test(home));
+  check("home hero destaque", home.includes('class="hero"'));
+  check("home grade de cards", home.includes('class="post-grid"'));
+  check("home secao recentes", home.includes('Artigos recentes'));
   check("home link favicon", home.includes('rel="icon"'));
 
   const icoRes = await worker.fetch({ url: SITE + "/favicon.svg" }, {}, {});
@@ -90,12 +93,14 @@ async function run() {
   check("post imagem cai query utm", !post.includes("utm_source"));
   check("post JSON-LD BlogPosting", post.includes('"@type":"BlogPosting"'));
   check("post h1", /<h1>Roteiro de 3 Dias em Gramado<\/h1>/.test(post));
-  check("post volta ao blog", post.includes("← Voltar ao blog"));
+  check("post volta ao blog", /<a href="\/">Início<\/a>\s*<span aria-hidden="true">›<\/span>/.test(post));
+  check("post breadcrumb atual", post.includes('aria-current="page">Roteiro de 3 Dias em Gramado</span>'));
   check("post tempo de leitura", /min de leitura/.test(post));
   check("post toc", post.includes('class="toc"'));
   check("post toc ancora h2", post.includes('<h2 id="por-que-visitar">'));
   check("post toc link", post.includes('href="#por-que-visitar">Por que visitar</a>'));
   check("post progress bar", post.includes('class="progress"'));
+  check("post layout center stage", post.includes('class="layout"'));
 
   const tagRes = await worker.fetch({ url: SITE + "/tag/gramado/" }, {}, {});
   const tag = await tagRes.text();

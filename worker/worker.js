@@ -232,7 +232,28 @@ a { color:var(--accent); }
 .header h1 a { color:#fff; text-decoration:none; }
 .header h1 a:hover { text-decoration:underline; text-underline-offset:4px; }
 .header p { position:relative; margin:10px auto 0; max-width:42ch; opacity:.92; font-size:1.06rem; }
-.container { max-width:760px; margin:-34px auto 64px; padding:0 18px; }
+.container { max-width:1000px; margin:-34px auto 64px; padding:0 18px; }
+.post-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(285px,1fr)); gap:26px; align-items:stretch; }
+.post-grid .post { margin:0; height:100%; display:flex; flex-direction:column; }
+.post-grid .post .cover { height:200px; }
+.post-grid .body { display:flex; flex-direction:column; flex:1; }
+.post-grid .more { margin-top:auto; }
+.hero { display:grid; grid-template-columns:1fr 1.05fr; margin-bottom:36px; background:var(--card);
+  border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+.hero .cover { width:100%; height:100%; min-height:300px; object-fit:cover; }
+.hero .body { padding:clamp(22px,4vw,40px); display:flex; flex-direction:column; justify-content:center; gap:16px; }
+.hero .tag { align-self:flex-start; }
+.hero h2 { margin:0; font-size:clamp(1.6rem,4vw,2.3rem); font-weight:750; line-height:1.15; letter-spacing:-.5px; }
+.hero h2 a { color:inherit; text-decoration:none; }
+.hero h2 a:hover { color:var(--accent); }
+.hero .summary { margin:0; font-size:1.08rem; }
+@media (max-width:820px) {
+  .hero { grid-template-columns:1fr; }
+  .hero .cover { min-height:200px; }
+}
+.section-title { margin:6px 0 24px; font-size:.82rem; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--muted); display:flex; align-items:center; gap:14px; }
+.section-title::after { content:""; height:1px; flex:1; background:var(--line); }
 .post { background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
   box-shadow:var(--shadow); overflow:hidden; margin-bottom:30px; transition:transform .18s ease, box-shadow .18s ease; }
 .post:hover { transform:translateY(-2px); box-shadow:0 2px 4px rgba(24,32,40,.06), 0 18px 40px -14px rgba(24,32,40,.22); }
@@ -241,16 +262,17 @@ a { color:var(--accent); }
 .body { padding:22px 26px 26px; }
 .meta { display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:.82rem; color:var(--muted); margin-bottom:12px; }
 .tag { display:inline-block; background:rgba(14,116,144,.13); color:var(--accent); font-size:.74rem; font-weight:650; letter-spacing:.06em; text-transform:uppercase; padding:5px 12px; border-radius:999px; }
-.post h2 { margin:0 0 8px; font-size:1.42rem; line-height:1.3; letter-spacing:-.2px; }
+.post h2 { margin:0 0 8px; font-size:1.42rem; font-weight:720; line-height:1.3; letter-spacing:-.2px; }
 .post h2 a { color:inherit; text-decoration:none; }
 .post h2 a:hover { color:var(--accent); }
 .summary { color:var(--muted); margin:0 0 18px; }
 .more { display:inline-flex; align-items:center; gap:6px; font-weight:650; text-decoration:none; }
 .more::after { content:"→"; transition:transform .15s ease; }
 .more:hover::after { transform:translateX(3px); }
-.crumb { margin:0 0 20px; font-size:.92rem; }
+.crumb { margin:0 0 20px; font-size:.92rem; color:var(--muted); }
 .crumb a { color:var(--muted); text-decoration:none; }
 .crumb a:hover { color:var(--accent); text-decoration:underline; }
+.crumb span[aria-current="page"] { color:var(--text); font-weight:650; }
 .progress { position:fixed; top:0; left:0; width:100%; height:3px; transform:scaleX(0); transform-origin:0 50%;
   background:linear-gradient(90deg,var(--accent),var(--accent2)); z-index:20; pointer-events:none; }
 @supports (animation-timeline: scroll()) {
@@ -260,11 +282,17 @@ a { color:var(--accent); }
 .page-title { margin:0 0 22px; font-size:clamp(1.5rem,4vw,2rem); letter-spacing:-.3px; }
 .tag a { color:inherit; text-decoration:none; }
 .toc { background:rgba(14,116,144,.06); border:1px solid var(--line); border-radius:14px;
-  padding:16px 20px; margin:2px 0 8px; }
+  padding:16px 20px; height:fit-content; }
 .toc-title { margin:0 0 8px; font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
 .toc ol { margin:0; padding-left:1.2em; display:grid; gap:6px; }
 .toc a { color:var(--accent); text-decoration:none; }
 .toc a:hover { text-decoration:underline; }
+.layout { display:grid; gap:30px; margin-top:2px; }
+@media (min-width:1024px) {
+  .layout { grid-template-columns:minmax(0,1fr) 230px; align-items:start; }
+  .content { grid-column:1; grid-row:1; }
+  .toc { grid-column:2; grid-row:1; position:sticky; top:88px; margin:0; }
+}
 .post-single { padding-bottom:10px; }
 .post-single .cover { border-radius:var(--radius) var(--radius) 0 0; }
 .post-single h1 { margin:.1em 0 .5em; font-size:clamp(1.7rem,4.5vw,2.3rem); line-height:1.22; letter-spacing:-.4px; }
@@ -394,7 +422,25 @@ async function home(request, origin) {
   } catch (e) {
     // Fallback: ainda renderiza a página mas com aviso
   }
-  const body = `<h1 class="sr">Últimos artigos</h1>${cardsHtml(posts)}`;
+  let hero = "";
+  let grid = posts;
+  if (posts[0] && posts[0].cover_image) {
+    const p = posts[0];
+    hero = `<article class="hero">
+      <a href="/post/${esc(p.slug)}/" aria-hidden="true" tabindex="-1"><img class="cover" loading="eager" src="${esc(cleanImageUrl(p.cover_image))}" alt="" role="presentation" /></a>
+      <div class="body">
+        <span class="tag">${esc((p.tags && p.tags[0]) || "Turismo")}</span>
+        <h2><a href="/post/${esc(p.slug)}/">${esc(p.title)}</a></h2>
+        <p class="summary">${esc(p.summary || "")}</p>
+        <a class="more" href="/post/${esc(p.slug)}/">Ler artigo completo</a>
+      </div>
+    </article>`;
+    grid = posts.slice(1);
+  }
+  const body = `<h1 class="sr">Últimos artigos</h1>
+${hero}
+<h2 class="section-title">Artigos recentes</h2>
+<div class="post-grid">${cardsHtml(grid)}</div>`;
   return new Response(
     page({
       type: "website",
@@ -436,14 +482,16 @@ async function postPage(request, origin, slug) {
     ? `<nav class="toc" aria-label="Neste artigo"><p class="toc-title">Neste artigo</p><ol>${toc.map((t) => `<li><a href="#${esc(t.id)}">${esc(t.text)}</a></li>`).join("")}</ol></nav>`
     : "";
 
-  const body = `<nav class="crumb"><a href="/" aria-label="Voltar para a página inicial">← Voltar ao blog</a></nav>
+  const body = `<nav class="crumb" aria-label="Trilha de navegação"><a href="/">Início</a> <span aria-hidden="true">›</span> <span aria-current="page">${esc(post.title)}</span></nav>
     <article class="post post-single">
       ${post.cover_image ? `<img class="cover" loading="lazy" src="${esc(cleanImageUrl(post.cover_image))}" alt="${esc(post.title)}" />` : ""}
       <div class="body">
         <div class="meta">${tags || `<span class="tag">${esc(post.category || "Turismo")}</span>`}${date ? `<span class="time">${date}</span>` : ""}${readTime ? `<span class="time">· ${readTime} min de leitura</span>` : ""}</div>
         <h1>${esc(post.title)}</h1>
-        ${tocHtml}
-        <div class="content">${content}</div>
+        <div class="layout">
+          ${tocHtml}
+          <div class="content">${content}</div>
+        </div>
       </div>
     </article>`;
   return new Response(
@@ -477,9 +525,9 @@ async function tagPage(request, origin, tag) {
   const pretty = tag.replace(/-/g, " ");
   const prettyTitle = pretty.charAt(0).toUpperCase() + pretty.slice(1);
   const desc = `Artigos sobre ${prettyTitle}.`;
-  const body = `<nav class="crumb"><a href="/" aria-label="Voltar para a página inicial">← Voltar ao blog</a></nav>
+  const body = `<nav class="crumb" aria-label="Trilha de navegação"><a href="/">Início</a> <span aria-hidden="true">›</span> <span aria-current="page">Artigos: ${esc(prettyTitle)}</span></nav>
     <h1 class="page-title">Artigos: ${esc(prettyTitle)}</h1>
-    ${filtered.length ? cardsHtml(filtered) : "<p>Nenhum artigo publicado com essa tag ainda.</p>"}`;
+    <div class="post-grid">${filtered.length ? cardsHtml(filtered) : "<p>Nenhum artigo publicado com essa tag ainda.</p>"}</div>`;
   return new Response(
     page({
       type: "website",
