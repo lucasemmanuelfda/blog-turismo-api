@@ -82,7 +82,9 @@ async function run() {
   check("post figure img", /<figure class="img"><img src="https:\/\/thumb\.wikimedia\.org\/t1\.jpg"/.test(post));
   check("post imagem cai query utm", !post.includes("utm_source"));
   check("post JSON-LD BlogPosting", post.includes('"@type":"BlogPosting"'));
-  check("post h1", /<h1 style="font-size:2rem/.test(post));
+  check("post h1", /<h1>Roteiro de 3 Dias em Gramado<\/h1>/.test(post));
+  check("post volta ao blog", post.includes("← Voltar ao blog"));
+  check("post tempo de leitura", /min de leitura/.test(post));
 
   // 404
   const nfRes = await worker.fetch({ url: SITE + "/post/nao-existe/" }, {}, {});

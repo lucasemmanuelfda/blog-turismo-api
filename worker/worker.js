@@ -160,6 +160,7 @@ function page(t) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f7490">
 ${gscMeta}
 <title>${esc(t.title)}</title>
 <meta name="description" content="${esc(t.desc)}">
@@ -176,36 +177,72 @@ ${ogImage ? `<meta property="og:image" content="${esc(ogImage)}">
 <meta name="twitter:image" content="${esc(ogImage)}">` : `<meta name="twitter:card" content="summary">`}
 ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
 <style>
-:root { --bg:#f4f6f9; --card:#fff; --text:#1c2733; --muted:#64748b; --accent:#0e7490; --accent2:#6d28d9; --line:#e2e8f0; }
-@media (prefers-color-scheme: dark) { :root { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --line:#334155; } }
+:root {
+  color-scheme: light dark;
+  --bg:#f6f3ee; --card:#fff; --text:#20262e; --muted:#6b7683;
+  --accent:#0e7490; --accent2:#6d28d9; --line:#e4e1da;
+  --shadow:0 1px 2px rgba(24,32,40,.05), 0 12px 32px -12px rgba(24,32,40,.18);
+  --radius:18px;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#10151c; --card:#182029; --text:#e4ebf2; --muted:#93a0ae; --line:#29323d;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 14px 36px -14px rgba(0,0,0,.5); }
+}
 * { box-sizing:border-box; }
-body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; }
+html { scroll-behavior:smooth; }
+body { margin:0; font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  font-size:16.5px; line-height:1.7; background:var(--bg); color:var(--text);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+::selection { background:rgba(14,116,144,.25); }
 a { color:var(--accent); }
-.header { background:linear-gradient(135deg,#0e7490,#6d28d9 75%); color:#fff; padding:48px 20px 56px; text-align:center; }
-.header a { color:#fff; text-decoration:none; }
-.header h1 { margin:0; font-size:clamp(1.8rem,5vw,2.6rem); }
-.container { max-width:820px; margin:-28px auto 60px; padding:0 16px; }
-.post { background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 10px 30px rgba(15,23,42,.08); overflow:hidden; margin-bottom:28px; }
-.cover { width:100%; height:260px; object-fit:cover; display:block; background:var(--line); }
-.body { padding:22px 24px 24px; }
-.category { display:inline-block; background:rgba(14,116,144,.12); color:var(--accent); font-size:.78rem; font-weight:600; text-transform:uppercase; padding:4px 10px; border-radius:999px; margin-bottom:12px; }
-.post h2 { margin:0 0 6px; font-size:1.45rem; line-height:1.25; }
+:focus-visible { outline:3px solid var(--accent); outline-offset:2px; border-radius:4px; }
+.header { position:relative; overflow:hidden; background:linear-gradient(140deg,#0f7490,#54139b 80%);
+  color:#fff; padding:56px 20px 64px; text-align:center; }
+.header::after { content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(120% 120% at 80% -20%, rgba(255,255,255,.22), transparent 55%); }
+.header h1 { position:relative; margin:0; font-size:clamp(1.9rem,6vw,2.8rem); font-weight:750; letter-spacing:-.5px; line-height:1.15; }
+.header h1 a { color:#fff; text-decoration:none; }
+.header h1 a:hover { text-decoration:underline; text-underline-offset:4px; }
+.header p { position:relative; margin:10px auto 0; max-width:42ch; opacity:.92; font-size:1.06rem; }
+.container { max-width:760px; margin:-34px auto 64px; padding:0 18px; }
+.post { background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  box-shadow:var(--shadow); overflow:hidden; margin-bottom:30px; transition:transform .18s ease, box-shadow .18s ease; }
+.post:hover { transform:translateY(-2px); box-shadow:0 2px 4px rgba(24,32,40,.06), 0 18px 40px -14px rgba(24,32,40,.22); }
+.cover { width:100%; height:240px; object-fit:cover; display:block; background:var(--line); }
+.post:hover .cover { filter:brightness(1.04); }
+.body { padding:22px 26px 26px; }
+.meta { display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:.82rem; color:var(--muted); margin-bottom:12px; }
+.tag { display:inline-block; background:rgba(14,116,144,.13); color:var(--accent); font-size:.74rem; font-weight:650; letter-spacing:.06em; text-transform:uppercase; padding:5px 12px; border-radius:999px; }
+.post h2 { margin:0 0 8px; font-size:1.42rem; line-height:1.3; letter-spacing:-.2px; }
 .post h2 a { color:inherit; text-decoration:none; }
-.post h2 a:hover { text-decoration:underline; }
-.post .summary { color:#475569; margin:0 0 18px; }
-@media (prefers-color-scheme: dark) { .post .summary { color:#cbd5e1; } }
-.btn { display:inline-block; cursor:pointer; font-weight:600; color:#fff; background:linear-gradient(135deg,var(--accent),var(--accent2)); border:0; border-radius:999px; padding:10px 22px; font-size:.92rem; text-decoration:none; }
-.btn:hover { filter:brightness(1.08); }
-.content h1,.content h2,.content h3 { line-height:1.3; margin:1.6em 0 .5em; }
-.content h1 { font-size:2rem; } .content h2 { font-size:1.5rem; } .content h3 { font-size:1.2rem; }
-.content p { margin:.75em 0; }
-.content .img, .content figure.img { margin:1.4em 0; }
-.content img { width:100%; height:auto; aspect-ratio:16/9; object-fit:cover; border-radius:12px; display:block; background:var(--line); }
-.content ul, .content ol { padding-left:1.4em; margin:.75em 0; }
-.content li { margin:.3em 0; }
-.footer { text-align:center; color:var(--muted); font-size:.85em; padding:0 16px 40px; }
+.post h2 a:hover { color:var(--accent); }
+.summary { color:var(--muted); margin:0 0 18px; }
+.more { display:inline-flex; align-items:center; gap:6px; font-weight:650; text-decoration:none; }
+.more::after { content:"→"; transition:transform .15s ease; }
+.more:hover::after { transform:translateX(3px); }
+.crumb { margin:0 0 20px; font-size:.92rem; }
+.crumb a { color:var(--muted); text-decoration:none; }
+.crumb a:hover { color:var(--accent); text-decoration:underline; }
+.post-single { padding-bottom:10px; }
+.post-single .cover { border-radius:var(--radius) var(--radius) 0 0; }
+.post-single h1 { margin:.1em 0 .5em; font-size:clamp(1.7rem,4.5vw,2.3rem); line-height:1.22; letter-spacing:-.4px; }
+.content { font-size:1.05rem; line-height:1.78; }
+.content h1,.content h2,.content h3 { line-height:1.32; margin:1.7em 0 .55em; letter-spacing:-.2px; }
+.content h1 { font-size:1.85rem; } .content h2 { font-size:1.42rem; } .content h3 { font-size:1.15rem; }
+.content p { margin:.85em 0; }
+.content .img, .content figure.img { margin:1.6em 0; }
+.content img { width:100%; height:auto; aspect-ratio:16/9; object-fit:cover; border-radius:14px; display:block; background:var(--line); }
+.content ul, .content ol { padding-left:1.3em; margin:.85em 0; }
+.content li { margin:.35em 0; }
+.content strong { font-weight:700; }
+code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em; border-radius:6px; font-size:.9em; }
+.footer { text-align:center; color:var(--muted); font-size:.85em; padding:0 18px 44px; }
+.footer a { color:var(--muted); text-decoration:none; border-bottom:1px dotted var(--muted); }
 .sr { position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden; }
-code{white-space:pre-wrap;}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation:none !important; transition:none !important; }
+  html { scroll-behavior:auto; }
+}
 </style>
 </head>
 <body>
@@ -217,7 +254,7 @@ code{white-space:pre-wrap;}
 <main id="principal" class="container">
 ${t.body}
 </main>
-<footer class="footer">Conteúdo informativo gerado automaticamente todos os dias. Fotos: Wikimedia Commons.</footer>
+<footer class="footer"><a href="/">Blog Turismo IA</a> · Conteúdo informativo gerado automaticamente todos os dias. Fotos: Wikimedia Commons.</footer>
 </body>
 </html>`;
 }
@@ -290,18 +327,17 @@ async function home(request, origin) {
   } catch (e) {
     // Fallback: ainda renderiza a página mas com aviso
   }
-  const cards = posts.map((p) => {
+const cards = posts.map((p) => {
     const img = p.cover_image ? `<img class="cover" loading="lazy" src="${esc(cleanImageUrl(p.cover_image))}" alt="" role="presentation" />` : "";
     const tag = (p.tags && p.tags[0]) ? esc(p.tags[0]) : "Turismo";
-    const date = p.published_at ? new Date(p.published_at).toLocaleDateString("pt-BR") : "";
+    const date = p.published_at ? `<time datetime="${esc(p.published_at)}">${new Date(p.published_at).toLocaleDateString("pt-BR")}</time>` : "";
     return `<article class="post">
       <a href="/post/${esc(p.slug)}/" aria-hidden="true" tabindex="-1">${img}</a>
       <div class="body">
-        <span class="category">${tag}</span>
+        <div class="meta"><span class="tag">${tag}</span>${date ? `<span class="time">${date}</span>` : ""}</div>
         <h2><a href="/post/${esc(p.slug)}/">${esc(p.title)}</a></h2>
         <p class="summary">${esc(p.summary || "")}</p>
-        <div class="meta">${date ? `<time datetime="${esc(p.published_at)}">${date}</time>` : ""}</div>
-        <a class="btn" href="/post/${esc(p.slug)}/">Ler artigo completo</a>
+        <a class="more" href="/post/${esc(p.slug)}/">Ler artigo completo</a>
       </div>
     </article>`;
   }).join("") || "<p>Nenhum artigo publicado ainda.</p>";
@@ -335,16 +371,20 @@ async function postPage(request, origin, slug) {
   const ogTitle = post.title;
   const canonical = `${origin}/post/${esc(post.slug)}/`;
   const date = post.published_at ? `<time datetime="${esc(post.published_at)}">${new Date(post.published_at).toLocaleDateString("pt-BR")}</time>` : "";
-  const tags = (post.tags || []).map((tag) => `<span class="category">${esc(String(tag).trim())}</span>`).join("");
+  const readTime = post.content
+    ? Math.max(1, Math.round(post.content.split(/\s+/).length / 200))
+    : null;
+  const tags = (post.tags || []).map((tag) => `<span class="tag">${esc(String(tag).trim())}</span>`).join("");
 
-  const body = `<article class="post">
-    <div class="body">
-      ${tags || `<span class="category">${esc(post.category || "Turismo")}</span>`}
-      <h1 style="font-size:2rem;margin:.3em 0 .2em;">${esc(post.title)}</h1>
-      <div class="meta">${date}</div>
-      <div class="content">${mdToHtml(post.content)}</div>
-    </div>
-  </article>`;
+  const body = `<nav class="crumb"><a href="/" aria-label="Voltar para a página inicial">← Voltar ao blog</a></nav>
+    <article class="post post-single">
+      ${post.cover_image ? `<img class="cover" loading="lazy" src="${esc(cleanImageUrl(post.cover_image))}" alt="${esc(post.title)}" />` : ""}
+      <div class="body">
+        <div class="meta">${tags || `<span class="tag">${esc(post.category || "Turismo")}</span>`}${date ? `<span class="time">${date}</span>` : ""}${readTime ? `<span class="time">· ${readTime} min de leitura</span>` : ""}</div>
+        <h1>${esc(post.title)}</h1>
+        <div class="content">${mdToHtml(post.content)}</div>
+      </div>
+    </article>`;
   return new Response(
     page({
       type: "article",
