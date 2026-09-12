@@ -56,6 +56,9 @@ function sitemapDate(s) {
 // Não usamos window (não existe no Worker).
 const SITE_ORIGIN = "https://blog-turismo-api.lucasemmanuel2005.workers.dev";
 
+// Favicon SVG (logo: gradiente da marca + montanha e sol)
+const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f7490"/><stop offset="1" stop-color="#7012c2"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#g)"/><circle cx="45" cy="19" r="6" fill="#fff" opacity=".95"/><path d="M9 46l15-22 8 11 7-9 16 20z" fill="#fff"/></svg>`;
+
 // Token de verificação do Google Search Console (método "HTML tag").
 // Preencher com o content da meta gerada pelo GSC, ex.: "ab12cd34ef56ab78",
 // e config para publicar no <head>: <meta name="google-site-verification" content="ab12cd34ef56ab78">
@@ -184,6 +187,8 @@ function page(t) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0f7490">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="shortcut icon" href="/favicon.svg">
 ${gscMeta}
 <title>${esc(t.title)}</title>
 <meta name="description" content="${esc(t.desc)}">
@@ -504,6 +509,16 @@ export default {
       const filename = path.slice(1); // ex.: googlea1b2c3d4e5f6a7b8.html
       return new Response(`google-site-verification: ${filename}\n`, {
         headers: secured({ "Content-Type": "text/plain; charset=utf-8" }),
+      });
+    }
+
+    // Favicon
+    if (path === "/favicon.svg" || path === "/favicon.ico") {
+      return new Response(FAVICON_SVG, {
+        headers: secured({
+          "Content-Type": "image/svg+xml; charset=utf-8",
+          "Cache-Control": "public, max-age=86400",
+        }),
       });
     }
 

@@ -64,6 +64,13 @@ async function run() {
   check("home link artigo", home.includes('/post/roteiro-de-3-dias-em-gramado/'));
   check("home skip link", home.includes('Pular para o conteúdo principal'));
   check("home imagem role presentation", /role="presentation"/.test(home));
+  check("home link favicon", home.includes('rel="icon"'));
+
+  const icoRes = await worker.fetch({ url: SITE + "/favicon.svg" }, {}, {});
+  const ico = await icoRes.text();
+  check("favicon 200", icoRes.status === 200);
+  check("favicon svg", ico.includes("<svg") && ico.includes("linearGradient"));
+  check("favicon content type", icoRes.headers.get("Content-Type").includes("image/svg+xml"));
 
   // Post
   const postRes = await worker.fetch(
