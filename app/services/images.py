@@ -1,10 +1,9 @@
-import json
 import re
 import urllib.parse
-import urllib.request
 from urllib.parse import quote
 
 from app.config import get_settings
+from app.services import http_get_json
 
 # 16:9 fixo: Wikimedia Commons redimensiona proporcionalmente e o frontend
 # recorta com object-fit: cover — sem hotlink com margens (padrão do LoremFlickr).
@@ -29,13 +28,11 @@ def _commons(keyword: str, n: int) -> list[str]:
         }
     )
     url = "https://commons.wikimedia.org/w/api.php?" + params
-    request = urllib.request.Request(
-        url,
-        headers={"User-Agent": "BlogTurismoAPI/1.0 (https://github.com/lucasemmanuelfda/blog-turismo-api)"},
-    )
+    headers = {
+        "User-Agent": "BlogTurismoAPI/1.0 (https://github.com/lucasemmanuelfda/blog-turismo-api)"
+    }
     try:
-        with urllib.request.urlopen(request, timeout=20) as r:
-            payload = json.loads(r.read().decode("utf-8"))
+        payload = http_get_json(url, timeout=20, headers=headers)
         pages = (payload.get("query") or {}).get("pages") or {}
         out: list[str] = []
         for page in pages.values():

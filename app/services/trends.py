@@ -6,9 +6,11 @@ candidatos em tópicos de viagem evergreen (atemporais) e sem notícias.
 import json
 import logging
 import threading
+import urllib.parse
 from datetime import date
 
 from app.config import get_settings
+from app.services import http_get_json
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +90,6 @@ class TrendService:
         key = get_settings().news_api_key
         if not key:
             return []
-        import urllib.parse
-        import urllib.request
 
         url = (
             "https://newsapi.org/v2/everything?"
@@ -97,8 +97,7 @@ class TrendService:
             f"&sortBy=publishedAt&apiKey={key}"
         )
         try:
-            with urllib.request.urlopen(url, timeout=15) as r:
-                payload = json.loads(r.read().decode("utf-8"))
+            payload = http_get_json(url, timeout=15)
             titles: list[str] = []
             for a in payload.get("articles", []):
                 titles.append(a.get("title", "") or "")

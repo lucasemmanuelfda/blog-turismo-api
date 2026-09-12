@@ -1,6 +1,13 @@
 import json
 import re
 import unicodedata
+import urllib.request
+
+
+def http_get_json(url: str, timeout: float, headers: dict[str, str] | None = None):
+    request = urllib.request.Request(url, headers=headers or {})
+    with urllib.request.urlopen(request, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
 
 
 def slugify(text: str, max_len: int = 200) -> str:
@@ -25,12 +32,6 @@ def unique_slug(text: str, existing_slugs: list[str]) -> str:
 
 def serialize_list(values: list[str]) -> str:
     return json.dumps(values, ensure_ascii=False)
-
-
-def parse_list(raw: str) -> list[str]:
-    if not raw:
-        return []
-    return json.loads(raw)
 
 
 def build_meta_title(title: str, max_len: int = 60) -> str:
