@@ -8,8 +8,7 @@ Repo público de um blog de turismo com geração de conteúdo por IA.
 
 - `app/` — API FastAPI (Python). `config.py` lê tudo de `.env` via pydantic-settings.
 - `worker/` — Cloudflare Worker (frontend SSR: sitemap, robots, JSON-LD, HTML indexável).
-- `frontend/index.html` — SPA estática sem build (fallback).
-- `.github/workflows/` — daily-generate (cron via API) e deploy-worker (Wrangler).
+- `.github/workflows/` — daily-generate (cron via API), publish-now e deploy-worker (Wrangler).
 
 ## Comandos
 
