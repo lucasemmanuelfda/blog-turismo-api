@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import models
 from app.config import get_settings
-from app.database import Base, engine
+from app.database import Base, engine, migrate
 from app.routers import categories, generate, posts
 from app import scheduler as scheduler_module
 
@@ -21,6 +21,7 @@ _scheduler = None
 async def lifespan(app: FastAPI):
     global _scheduler
     Base.metadata.create_all(bind=engine)
+    migrate()
     if settings.environment == "production":
         _scheduler = scheduler_module.start()
     yield

@@ -291,11 +291,18 @@ a { color:var(--accent); }
 .content li { margin:.35em 0; }
 .content strong { font-weight:700; }
 code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em; border-radius:6px; font-size:.9em; }
-.kit { margin:2.2em 0 0; padding:20px 22px; border:1px solid var(--line); border-radius:var(--radius); background:var(--card); box-shadow:var(--shadow); }
-.kit h2 { font-size:1.12rem; letter-spacing:-.2px; margin:0 0 .4em; }
-.kit p { color:var(--muted); font-size:.88em; line-height:1.6; margin:0; }
-.kit ul { padding-left:1.2em; margin:.7em 0 0; }
-.kit li { margin:.45em 0; }
+.kit { margin:2.4em 0 0; }
+.kit h2 { font-size:1.28rem; letter-spacing:-.2px; margin:0 0 .3em; }
+.kit-disclosure { color:var(--muted); font-size:.85em; line-height:1.6; margin:0 0 1.1em; }
+.kit-grid { list-style:none; margin:0; padding:0; display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); }
+.kit-card { display:flex; gap:14px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); transition:transform .15s ease, box-shadow .15s ease; }
+.kit-card:hover { transform:translateY(-2px); box-shadow:0 8px 24px -10px rgba(24,32,40,.3); }
+.kit-num { flex:none; width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; font-size:.85rem; font-weight:700; display:grid; place-items:center; }
+.kit-info h3 { font-size:1rem; line-height:1.35; margin:0 0 .3em; }
+.kit-info h3 a { color:var(--text); text-decoration:none; }
+.kit-info p { color:var(--muted); font-size:.87em; line-height:1.55; margin:0 0 .55em; }
+.kit-cta { display:inline-block; color:var(--accent); font-size:.85rem; font-weight:600; text-decoration:none; }
+.kit-cta:hover { text-decoration:underline; }
 .footer { text-align:center; color:var(--muted); font-size:.85em; padding:0 18px 44px; }
 .footer a { color:var(--muted); text-decoration:none; border-bottom:1px dotted var(--muted); }
 .sr { position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden; }
@@ -457,15 +464,28 @@ function amazonSearchLink(query) {
   return `https://www.amazon.com.br/s?k=${encodeURIComponent(query)}&tag=${AMAZON_TAG}`;
 }
 
-function kitHtml() {
-  const items = KIT_ITEMS.map(
-    ([name, note, query]) =>
-      `<li><a rel="nofollow noopener" href="${amazonSearchLink(query)}">${esc(name)}</a> — ${esc(note)}</li>`
-  ).join("");
-  return `<section class="kit" aria-label="Links de afiliado da Amazon">
-  <h2>Kit recomendado para suas viagens</h2>
-  <p>Alguns links desta página são de afiliado da Amazon. Se você comprar por eles, o blog ganha uma pequena comissão sem custo extra para você.</p>
-  <ul>${items}</ul>
+function kitHtml(post) {
+  const aiKit = Array.isArray(post?.kit_recommendations) ? post.kit_recommendations : [];
+  const kit = aiKit.length
+    ? aiKit
+    : KIT_ITEMS.map(([name, note, query]) => ({ name, note, query }));
+  const items = kit
+    .map((item, i) => {
+      const url = amazonSearchLink(item.query || item.name);
+      return `<li class="kit-card">
+      <span class="kit-num" aria-hidden="true">${i + 1}</span>
+      <div class="kit-info">
+        <h3><a rel="nofollow noopener" href="${url}">${esc(item.name)}</a></h3>
+        ${item.note ? `<p>${esc(item.note)}</p>` : ""}
+        <a class="kit-cta" rel="nofollow noopener" href="${url}">Ver na Amazon<span aria-hidden="true"> →</span></a>
+      </div>
+    </li>`;
+    })
+    .join("");
+  return `<section class="kit" aria-label="Kit recomendado para essa viagem">
+  <h2>Kit recomendado para essa viagem</h2>
+  <p class="kit-disclosure">Alguns links desta página são de afiliado da Amazon. Se você comprar por eles, o blog ganha uma pequena comissão sem custo extra para você.</p>
+  <ul class="kit-grid">${items}</ul>
 </section>`;
 }
 
@@ -506,7 +526,7 @@ async function postPage(request, origin, slug) {
           ${tocHtml}
           <div class="content">${content}</div>
         </div>
-        ${kitHtml()}
+        ${kitHtml(post)}
       </div>
     </article>`;
   return new Response(

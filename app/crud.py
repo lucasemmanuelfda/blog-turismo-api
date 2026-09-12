@@ -48,6 +48,7 @@ def create_post(db: Session, data: schemas.PostCreate) -> models.Post:
         scheduled_at=data.scheduled_at,
         keywords=serialize_list(data.keywords),
         tags=serialize_list(data.tags),
+        kit_recommendations=serialize_list([k.model_dump() for k in data.kit_recommendations]),
         meta_title=data.meta_title or data.title,
         meta_description=data.meta_description,
         category_id=data.category_id,
@@ -121,6 +122,8 @@ def update_post(db: Session, post_id: int, data: schemas.PostUpdate) -> models.P
             continue
         if field in ("keywords", "tags"):
             value = serialize_list(value or [])
+        if field == "kit_recommendations":
+            value = serialize_list([i.model_dump() for i in (value or [])])
         setattr(post, field, value)
 
     if post.status == "published" and not post.published_at:

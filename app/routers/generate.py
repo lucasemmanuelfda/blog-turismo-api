@@ -50,6 +50,7 @@ def _to_post(
             scheduled_at=scheduled_at,
             keywords=data["keywords"],
             tags=data["tags"],
+            kit_recommendations=data.get("kit_recommendations", []),
             meta_title=data["meta_title"] or data["title"],
             meta_description=data["meta_description"] or data["summary"][:155],
             category_id=category.id if category else None,

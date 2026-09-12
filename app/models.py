@@ -37,6 +37,7 @@ class Post(Base):
 
     keywords: Mapped[str] = mapped_column(Text, default="")  # JSON list
     tags: Mapped[str] = mapped_column(Text, default="")  # JSON list
+    kit_recommendations: Mapped[str] = mapped_column(Text, default="[]")  # JSON list de {name, note, query}
 
     meta_title: Mapped[str] = mapped_column(String(200), default="")
     meta_description: Mapped[str] = mapped_column(Text, default="")

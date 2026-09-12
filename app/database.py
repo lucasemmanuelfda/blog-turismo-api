@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
@@ -17,6 +17,16 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 class Base(DeclarativeBase):
     pass
+
+
+def migrate():
+    """Aplica colunas novas que create_all não adiciona em tabelas existentes."""
+    if "posts" not in inspect(engine).get_table_names():
+        return
+    columns = {c["name"] for c in inspect(engine).get_columns("posts")}
+    if "kit_recommendations" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE posts ADD COLUMN kit_recommendations TEXT NOT NULL DEFAULT '[]'"))
 
 
 def get_db():

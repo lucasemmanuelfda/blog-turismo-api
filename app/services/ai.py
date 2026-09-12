@@ -9,6 +9,21 @@ from app.config import get_settings
 from app.services.memory import memory
 
 
+def _clean_kit(raw: Any) -> list[dict[str, str]]:
+    """Mantém até 3 itens de kit com name/query válidos (never quebra o post)."""
+    if not isinstance(raw, list):
+        return []
+    items = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        query = str(item.get("query") or name).strip()
+        if name and query and len(items) < 3:
+            items.append({"name": name, "note": str(item.get("note") or "").strip(), "query": query})
+    return items
+
+
 class AIService:
     """Gera conteúdo de turismo usando qualquer API compatível com OpenAI."""
 
@@ -73,6 +88,9 @@ Regras técnicas (mantenha):
 - Use Markdown limpo (## para H2, ### para H3, listas e **destaques**).
 - Inclua dicas práticas, horários, custo médio, melhor época e como chegar.
 - Cite datas, valores e fatos de forma conservadora (evite dados inventados).
+- Para kit_recommendations: 3 produtos REAIS e genéricos, SEM marca, SEM link,
+  úteis de verdade no destino (sapatilha aquática em Bonito, capa impermeável em
+  Lençóis). A Amazon será a vitrine: nada de marcas específicas.
 - Retorne SOMENTE JSON válido, sem texto ao redor, no formato:
 {{
   "title": "título SEO com até 60 caracteres",
@@ -89,7 +107,14 @@ Regras técnicas (mantenha):
     "como_chegar": "ex.: 'ônibus de Porto Alegre, 2h'",
     "destaques": "3 destaques separados por vírgula",
     "dicas": "3 dicas práticas separadas por vírgula"
-  }}
+  }},
+  "kit_recommendations": [
+    {{
+      "name": "nome curto do produto genérico (ex.: Mochila de trilha 40L)",
+      "note": "frase de 8 a 12 palavras explicando POR QUE é útil NESTE destino",
+      "query": "termo de busca vago para a Amazon em pt-BR, ex.: 'mochila de trilha'"
+    }}
+  ]
 }}
 """.strip()
 
@@ -217,12 +242,14 @@ catálogo de atrações nem tom publicitário.
             "tags": [],
             "image_prompt": "",
             "facts": {},
+            "kit_recommendations": [],
         }
         defaults.update(data)
         data = defaults
 
         if not isinstance(data.get("facts"), dict):
             data["facts"] = {}
+        data["kit_recommendations"] = _clean_kit(data.get("kit_recommendations"))
         if not data["content"] or len(data["content"]) < 300:
             data["content"] = self._fallback_markdown(data["title"] or "título")
         return data

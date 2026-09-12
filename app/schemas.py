@@ -7,6 +7,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 PostStatus = Literal["draft", "scheduled", "published"]
 
 
+class KitItem(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    note: str = ""
+    query: str = Field(min_length=1, max_length=120)
+
+
 class CategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str | None = None
@@ -31,6 +37,7 @@ class PostBase(BaseModel):
     scheduled_at: datetime | None = None
     keywords: list[str] = []
     tags: list[str] = []
+    kit_recommendations: list[KitItem] = []
     meta_title: str = ""
     meta_description: str = ""
     category_id: int | None = None
@@ -49,6 +56,7 @@ class PostUpdate(BaseModel):
     scheduled_at: datetime | None = None
     keywords: list[str] | None = None
     tags: list[str] | None = None
+    kit_recommendations: list[KitItem] | None = None
     meta_title: str | None = None
     meta_description: str | None = None
     category_id: int | None = None
@@ -69,6 +77,7 @@ class PostRead(BaseModel):
     published_at: datetime | None
     keywords: list[str]
     tags: list[str]
+    kit_recommendations: list[KitItem]
     meta_title: str
     meta_description: str
     is_ai_generated: bool
@@ -76,7 +85,7 @@ class PostRead(BaseModel):
     updated_at: datetime
     category_id: int | None
 
-    @field_validator("keywords", "tags", mode="before")
+    @field_validator("keywords", "tags", "kit_recommendations", mode="before")
     @classmethod
     def parse_json_list(cls, value):
         if isinstance(value, str):

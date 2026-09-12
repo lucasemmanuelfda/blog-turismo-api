@@ -21,6 +21,10 @@ function fakePost(now = new Date().toISOString()) {
     tags: ["Gramado", "Serra Gaúcha"],
     category_id: null,
     keywords: ["gramado"],
+    kit_recommendations: [
+      { name: "Jaqueta corta-vento", note: "pra encarar o vento da serra à noite", query: "jaqueta corta vento" },
+      { name: "Mochila de trilha", note: "leve para caminhar nos cânions", query: "mochila de trilha" },
+    ],
     created_at: now,
   };
 }
@@ -102,8 +106,11 @@ async function run() {
   check("post progress bar", post.includes('class="progress"'));
   check("post layout center stage", post.includes('class="layout"'));
   check("post kit afiliado", post.includes('class="kit"'));
+  check("post kit item da IA", post.includes("Jaqueta corta-vento"));
+  check("post kit item note", post.includes("encarar o vento da serra"));
   check("post kit tag amazon", post.includes("tag=blogturismo20-20"));
   check("post kit disclosure", post.includes("afiliado da Amazon"));
+  check("post kit cta", post.includes("Ver na Amazon"));
 
   const tagRes = await worker.fetch({ url: SITE + "/tag/gramado/" }, {}, {});
   const tag = await tagRes.text();
