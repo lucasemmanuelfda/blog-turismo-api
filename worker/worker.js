@@ -19,6 +19,21 @@ const DEFAULT_DESC =
 
 // ---------- Utilitários ----------
 
+// Headers de segurança aplicados em todas as respostas.
+// O site não usa JS nem iframes; script-src 'none' e frame-ancestors 'none' são seguros.
+const SECURITY_HEADERS = {
+  "Content-Security-Policy":
+    "default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; script-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+};
+
+function secured(extra = {}) {
+  return { ...SECURITY_HEADERS, ...extra };
+}
+
 function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;")
@@ -302,7 +317,7 @@ async function home(request, origin) {
       body,
       jsonld: blogJsonLd(),
     }),
-    { headers: { "Content-Type": "text/html; charset=utf-8" } }
+    { headers: secured({ "Content-Type": "text/html; charset=utf-8" }) }
   );
 }
 
@@ -312,7 +327,7 @@ async function postPage(request, origin, slug) {
     return new Response("Artigo não encontrado", {
       status: 404,
       statusText: "Not Found",
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
+      headers: secured({ "Content-Type": "text/plain; charset=utf-8" }),
     });
   }
   const title = post.meta_title || post.title || DEFAULT_TITLE;
@@ -343,7 +358,7 @@ async function postPage(request, origin, slug) {
       body,
       jsonld: postJsonLd(post),
     }),
-    { headers: { "Content-Type": "text/html; charset=utf-8" } }
+    { headers: secured({ "Content-Type": "text/html; charset=utf-8" }) }
   );
 }
 
@@ -361,7 +376,7 @@ export default {
     if (/^\/google[0-9a-f]{8,64}\.html$/.test(path)) {
       const filename = path.slice(1); // ex.: googlea1b2c3d4e5f6a7b8.html
       return new Response(`google-site-verification: ${filename}\n`, {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
+        headers: secured({ "Content-Type": "text/plain; charset=utf-8" }),
       });
     }
 
@@ -371,7 +386,7 @@ export default {
 Allow: /
 Sitemap: ${origin}/sitemap.xml
 `;
-      return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+      return new Response(body, { headers: secured({ "Content-Type": "text/plain; charset=utf-8" }) });
     }
 
     // Sitemap.xml — gerado dinamicamente a partir dos posts publicados
@@ -390,7 +405,7 @@ Sitemap: ${origin}/sitemap.xml
   <url><loc>${origin}/</loc><changefreq>daily</changefreq></url>
 ${links}
 </urlset>`;
-      return new Response(body, { headers: { "Content-Type": "application/xml; charset=utf-8" } });
+      return new Response(body, { headers: secured({ "Content-Type": "application/xml; charset=utf-8" }) });
     }
 
     // Slug real: /post/<slug>/

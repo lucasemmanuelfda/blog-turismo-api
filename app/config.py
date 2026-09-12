@@ -16,6 +16,13 @@ class Settings(BaseSettings):
 
     admin_key: str = ""
 
+    # Origins (separadas por vírgula) autorizadas no CORS.
+    # O frontend (workers.dev/Pages/Netlify) além do dev local.
+    cors_origins: str = (
+        "https://blog-turismo-api.lucasemmanuel2005.workers.dev,"
+        "http://localhost:8000,http://127.0.0.1:8000"
+    )
+
     database_url: str = ""
 
     ai_base_url: str = ""

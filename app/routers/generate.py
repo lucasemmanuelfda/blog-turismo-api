@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,6 +12,8 @@ from app.services.ai import ai_service
 from app.services.images import add_attribution, image_urls, insert_images
 from app.services.memory import memory
 from app.services.trends import SEED_TOPICS as SEED_TOPICS_FALLBACK, trends
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/generate", tags=["generate"])
 
@@ -89,9 +92,10 @@ def generate_post(
     try:
         post = _to_post(db, request.topic, category_name, request.scheduled_at, provider)
     except Exception as exc:
+        logger.warning("Falha ao gerar conteúdo: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Falha ao gerar conteúdo: {exc}",
+            detail="Falha ao gerar conteúdo. Tente novamente mais tarde.",
         )
 
     return schemas.GenerateResponse(
