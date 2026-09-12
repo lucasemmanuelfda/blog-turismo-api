@@ -6,13 +6,11 @@ from urllib.parse import quote
 
 from app.config import get_settings
 
+# 16:9 fixo: Wikimedia Commons redimensiona proporcionalmente e o frontend
+# recorta com object-fit: cover — sem hotlink com margens (padrão do LoremFlickr).
 WIDTH, HEIGHT = 1200, 600
 
 ATTRIBUTION = "*Fotos: Wikimedia Commons.*"
-
-# Impede hotlink externo de adicionar margens (o padrão do LoremFlickr) e
-# garante fotos reais: Wikimedia Commons redimensiona proporcionalmente,
-# e o frontend recorta para 16:9 com object-fit: cover.
 
 
 def _commons(keyword: str, n: int) -> list[str]:

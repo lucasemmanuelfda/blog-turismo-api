@@ -4,9 +4,9 @@ apenas um resumo compacto da memória nos próximos prompts."""
 import json
 import os
 import threading
-from datetime import datetime
 
 from app.config import get_settings
+from app.timeutil import utcnow
 
 MAX_FACTS_KEPT = 20
 MAX_FACTS_IN_PROMPT = 5
@@ -42,7 +42,7 @@ class MemoryManager:
         """Guarda fatos estruturados e títulos já gerados sobre um tema."""
         key = self._key(topic)
         slot = self.data["topics"].setdefault(key, {"titles": [], "facts": [], "category": None})
-        slot["titles"].append({"title": title, "slug": slug, "when": datetime.utcnow().isoformat(timespec="seconds")})
+        slot["titles"].append({"title": title, "slug": slug, "when": utcnow().isoformat(timespec="seconds")})
         slot["titles"] = slot["titles"][-20:]
         known = {f.get("detail", "") for f in slot["facts"]}
         for label, detail in (facts or {}).items():

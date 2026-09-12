@@ -7,4 +7,5 @@ blog.db
 .pytest_cache/test_memory.json
 test_memory.json
 trends-cache.json
+blog-memory.json
 .wrangler/

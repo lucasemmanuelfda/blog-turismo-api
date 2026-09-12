@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.services import serialize_list, unique_slug
+from app.timeutil import utcnow
 
 
 # ---------- Categorias ----------
@@ -52,7 +53,7 @@ def create_post(db: Session, data: schemas.PostCreate) -> models.Post:
         category_id=data.category_id,
     )
     if data.status == "published" and not post.published_at:
-        post.published_at = datetime.utcnow()
+        post.published_at = utcnow()
     db.add(post)
     db.commit()
     db.refresh(post)
@@ -89,7 +90,7 @@ def publish_post(db: Session, post_id: int) -> models.Post | None:
     if post:
         post.status = "published"
         if not post.published_at:
-            post.published_at = datetime.utcnow()
+            post.published_at = utcnow()
         db.commit()
         db.refresh(post)
     return post
@@ -97,7 +98,7 @@ def publish_post(db: Session, post_id: int) -> models.Post | None:
 
 def publish_due_posts(db: Session, now: datetime | None = None) -> int:
     """Publica todos os posts agendados cuja data já passou."""
-    now = now or datetime.utcnow()
+    now = now or utcnow()
     result = db.execute(
         update(models.Post)
         .where(
@@ -123,7 +124,7 @@ def update_post(db: Session, post_id: int, data: schemas.PostUpdate) -> models.P
         setattr(post, field, value)
 
     if post.status == "published" and not post.published_at:
-        post.published_at = datetime.utcnow()
+        post.published_at = utcnow()
     db.commit()
     db.refresh(post)
     return post

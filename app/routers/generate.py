@@ -11,7 +11,8 @@ from app.routers.deps import require_admin
 from app.services.ai import ai_service
 from app.services.images import add_attribution, image_urls, insert_images
 from app.services.memory import memory
-from app.services.trends import SEED_TOPICS as SEED_TOPICS_FALLBACK, trends
+from app.services.trends import SEED_TOPICS as FALLBACK_TOPICS, trends
+from app.timeutil import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +118,7 @@ def _topics_of_the_day() -> list[str]:
         candidates, count=settings.max_posts_per_day + 3
     )
     fresh = [t for t in evergreen if memory._key(t) not in set(memory.data["topics"])]
-    return fresh or evergreen or SEED_TOPICS_FALLBACK
+    return fresh or evergreen or FALLBACK_TOPICS
 
 
 @router.get("/topics", response_model=list[str])
@@ -148,13 +149,14 @@ def generate_daily(
     topics = _topics_of_the_day()
     limit = min(count or settings.max_posts_per_day, settings.max_posts_per_day)
     posts: list[models.Post] = []
-    now = datetime.utcnow()
+    now = utcnow()
 
     for i, topic in enumerate(topics[:limit]):
         scheduled_at = now + timedelta(hours=24 + i * 6) if publish else None
         try:
             posts.append(_to_post(db, topic.strip(), None, scheduled_at))
-        except Exception:
+        except Exception as exc:
+            logger.warning("Falha ao gerar post para '%s': %s", topic, exc)
             continue
 
     return [schemas.PostRead.model_validate(p) for p in posts]

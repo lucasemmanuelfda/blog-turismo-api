@@ -4,10 +4,13 @@ Devolve CANDIDATOS brutos (termos/títulos); a camada de IA transforma esses
 candidatos em tópicos de viagem evergreen (atemporais) e sem notícias.
 """
 import json
+import logging
 import threading
 from datetime import date
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 SEED_TOPICS = [
     "praias do nordeste",
@@ -76,7 +79,8 @@ class TrendService:
                         queries.extend(str(q) for q in data["query"].tolist())
                     break
             return self._dedupe(queries)[:n]
-        except Exception:
+        except Exception as exc:
+            logger.warning("Google Trends indisponível: %s", exc)
             return []
 
     def _news(self, n: int) -> list[str]:
@@ -100,7 +104,8 @@ class TrendService:
                 titles.append(a.get("title", "") or "")
                 titles.append(a.get("description", "") or "")
             return self._dedupe(titles)[:n]
-        except Exception:
+        except Exception as exc:
+            logger.warning("NewsAPI indisponível: %s", exc)
             return []
 
     def daily_candidates(self) -> list[str]:

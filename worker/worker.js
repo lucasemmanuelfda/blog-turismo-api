@@ -4,11 +4,7 @@
  * Serve o blog com HTML indexável por crawlers (Google) e por IA (ChatGPT / Facebook / etc.
  * via Open Graph + JSON-LD), sem depender de JavaScript no cliente.
  *
- * COMO USAR:
- *  1. Abra https://dash.cloudflare.com → Workers & Pages → seu Worker.
- *  2. No editor, apague o conteúdo anterior e cole TODAS as linhas deste arquivo.
- *  3. Troque a constante API_BASE_URL abaixo se necessário.
- *  4. Deploy. Pronto: Google/Gerentes de IA já leem o site sem JS.
+ * Deploy: `wrangler deploy` (ou via GitHub Actions em .github/workflows/deploy-worker.yml).
  */
 
 const API_BASE_URL = "https://blog-turismo-api.onrender.com";
@@ -51,27 +47,16 @@ function sitemapDate(s) {
   return m ? m[1] : "";
 }
 
-// Guarda só o esquema+host para montar URLs absolutas (canonical / og:url)
-// origin fixo de referência (apenas para construir URLs absolutas de schema.org).
-// Não usamos window (não existe no Worker).
+// Origin fixa de referência para construir URLs absolutas de schema.org (canonical / og:url).
 const SITE_ORIGIN = "https://blog-turismo-api.lucasemmanuel2005.workers.dev";
 
 // Favicon SVG (logo: gradiente da marca + montanha e sol)
 const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f7490"/><stop offset="1" stop-color="#7012c2"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#g)"/><circle cx="45" cy="19" r="6" fill="#fff" opacity=".95"/><path d="M9 46l15-22 8 11 7-9 16 20z" fill="#fff"/></svg>`;
 
-// Token de verificação do Google Search Console (método "HTML tag").
-// Preencher com o content da meta gerada pelo GSC, ex.: "ab12cd34ef56ab78",
-// e config para publicar no <head>: <meta name="google-site-verification" content="ab12cd34ef56ab78">
+// Verificação do Google Search Console.
+// Método do arquivo: o Worker serve /google<hex>.html com "google-site-verification: <arquivo>".
+// Também emite a meta tag <meta name="google-site-verification"> quando o token é definido aqui.
 const GOOGLE_SITE_VERIFICATION = "5r8Ci2K7Dr-x1L1pogJ4qXrXxTQHxzURb2w9djRXs0o";
-
-function originOfUrl(u) {
-  try {
-    const nu = new URL(u);
-    return nu.origin;
-  } catch {
-    return "";
-  }
-}
 
 // Remove 'utm_*' e outros parâmetros de rastreio das imagens (Wikimedia injeta utm_source).
 function cleanImageUrl(u) {
@@ -359,7 +344,7 @@ function postJsonLd(a) {
   });
 }
 
-// ---------- Carrregamento de dados da API ----------
+// ---------- Carregamento de dados da API ----------
 
 async function fetchPosts(limit = 30) {
   const u = `${API_BASE_URL}/posts?status=published&limit=${limit}`;
