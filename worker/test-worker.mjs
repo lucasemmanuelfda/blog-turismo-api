@@ -11,7 +11,7 @@ function fakePost(now = new Date().toISOString()) {
     slug: "roteiro-de-3-dias-em-gramado",
     summary: "O que fazer e onde comer em Gramado.",
     content:
-      "## Por que visitar\n\n**Gramado** é linda.\n\n- Ver o Natal Luz\n- Provar fondue\n\n![Natal Luz](https://thumb.wikimedia.org/t1.jpg?utm_source=commons.wikimedia.org)\n\n### Dicas\n\nVeja [mais](https://exemplo.com/outro).\n\n1. Primeiro\n2. Segundo",
+      "## Por que visitar\n\n**Gramado** é linda.\n\n- Ver o Natal Luz\n- Provar fondue\n\n![Natal Luz](https://thumb.wikimedia.org/t1.jpg?utm_source=commons.wikimedia.org)\n\n### Dicas\n\nVeja [mais](https://exemplo.com/outro).\n\n1. Primeiro\n2. Segundo\n\n## Quando ir\n\nA melhor época é no inverno.",
     cover_image: "https://thumb.wikimedia.org/t2.jpg?utm_source=x",
     status: "published",
     published_at: now,
@@ -76,7 +76,7 @@ async function run() {
   check("post canonical", post.includes('rel="canonical" href="' + SITE + "/post/roteiro-de-3-dias-em-gramado/\""));
   check("post og:title", post.includes('<meta property="og:title" content="Roteiro de 3 Dias em Gramado">'));
   check("post title SEO", post.includes('<title>Roteiro 3 Dias Gramado SEO</title>'));
-  check("post h2", /<h2>Por que visitar<\/h2>/.test(post));
+  check("post h2", /<h2 id="por-que-visitar">Por que visitar<\/h2>/.test(post));
   check("post strong", /<strong>Gramado<\/strong>/.test(post));
   check("post ul", /<ul><li>Ver o Natal Luz<\/li>/.test(post));
   check("post figure img", /<figure class="img"><img src="https:\/\/thumb\.wikimedia\.org\/t1\.jpg"/.test(post));
@@ -85,6 +85,20 @@ async function run() {
   check("post h1", /<h1>Roteiro de 3 Dias em Gramado<\/h1>/.test(post));
   check("post volta ao blog", post.includes("← Voltar ao blog"));
   check("post tempo de leitura", /min de leitura/.test(post));
+  check("post toc", post.includes('class="toc"'));
+  check("post toc ancora h2", post.includes('<h2 id="por-que-visitar">'));
+  check("post toc link", post.includes('href="#por-que-visitar">Por que visitar</a>'));
+  check("post progress bar", post.includes('class="progress"'));
+
+  const tagRes = await worker.fetch({ url: SITE + "/tag/gramado/" }, {}, {});
+  const tag = await tagRes.text();
+  check("tag status 200", tagRes.status === 200);
+  check("tag titulo", tag.includes("Artigos: Gramado"));
+  check("tag canonical", tag.includes('rel="canonical" href="' + SITE + "/tag/gramado/\""));
+
+  const emptyTagRes = await worker.fetch({ url: SITE + "/tag/destino/" }, {}, {});
+  const emptyTag = await emptyTagRes.text();
+  check("tag vazia aviso", emptyTag.includes("Nenhum artigo publicado com essa tag ainda"));
 
   // 404
   const nfRes = await worker.fetch({ url: SITE + "/post/nao-existe/" }, {}, {});

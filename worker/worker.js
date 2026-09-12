@@ -83,10 +83,20 @@ function cleanImageUrl(u) {
 
 // ---------- Markdown → HTML (SSR, sem JS) ----------
 
-function mdToHtml(md) {
+function slugify(s) {
+  return String(s)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function mdToHtml(md, toc) {
   if (!md) return "";
   const lines = md.replace(/\r\n/g, "\n").split("\n");
   const out = [];
+  const usedIds = new Set();
   let i = 0;
 
   const inlineSafe = (s) =>
@@ -109,7 +119,20 @@ function mdToHtml(md) {
     const h = l.match(/^(#{1,6})\s+(.*)$/);
     if (h) {
       const lvl = h[1].length;
-      out.push(`<h${lvl}>${inlineSafe(h[2])}</h${lvl}>`);
+      const text = inlineSafe(h[2]);
+      if (lvl === 2 && toc) {
+        let id = slugify(h[2]);
+        if (usedIds.has(id)) {
+          let n = 2;
+          while (usedIds.has(`${id}-${n}`)) n++;
+          id = `${id}-${n}`;
+        }
+        usedIds.add(id);
+        toc.push({ id, text: h[2].replace(/[*_]/g, "") });
+        out.push(`<h2 id="${esc(id)}">${text}</h2>`);
+      } else {
+        out.push(`<h${lvl}>${text}</h${lvl}>`);
+      }
       i++;
       continue;
     }
@@ -223,6 +246,20 @@ a { color:var(--accent); }
 .crumb { margin:0 0 20px; font-size:.92rem; }
 .crumb a { color:var(--muted); text-decoration:none; }
 .crumb a:hover { color:var(--accent); text-decoration:underline; }
+.progress { position:fixed; top:0; left:0; width:100%; height:3px; transform:scaleX(0); transform-origin:0 50%;
+  background:linear-gradient(90deg,var(--accent),var(--accent2)); z-index:20; pointer-events:none; }
+@supports (animation-timeline: scroll()) {
+  .progress { animation:progress-grow linear; animation-timeline:scroll(root); }
+}
+@keyframes progress-grow { to { transform:scaleX(1); } }
+.page-title { margin:0 0 22px; font-size:clamp(1.5rem,4vw,2rem); letter-spacing:-.3px; }
+.tag a { color:inherit; text-decoration:none; }
+.toc { background:rgba(14,116,144,.06); border:1px solid var(--line); border-radius:14px;
+  padding:16px 20px; margin:2px 0 8px; }
+.toc-title { margin:0 0 8px; font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+.toc ol { margin:0; padding-left:1.2em; display:grid; gap:6px; }
+.toc a { color:var(--accent); text-decoration:none; }
+.toc a:hover { text-decoration:underline; }
 .post-single { padding-bottom:10px; }
 .post-single .cover { border-radius:var(--radius) var(--radius) 0 0; }
 .post-single h1 { margin:.1em 0 .5em; font-size:clamp(1.7rem,4.5vw,2.3rem); line-height:1.22; letter-spacing:-.4px; }
@@ -247,6 +284,7 @@ code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em;
 </head>
 <body>
 <a class="sr" href="#principal">Pular para o conteúdo principal</a>
+<div class="progress" aria-hidden="true"></div>
 <header class="header">
   <h1><a href="/">Blog Turismo IA</a></h1>
   <p>Destinos, roteiros e dicas de viagem.</p>
@@ -320,6 +358,30 @@ function handleSlugUrl(origin, path) {
   return decodeURIComponent(slug.split("/")[0]);
 }
 
+function slugTag(t) {
+  return encodeURIComponent(String(t).toLowerCase().replace(/\s+/g, "-"));
+}
+
+function cardsHtml(posts) {
+  return posts.map((p) => {
+    const img = p.cover_image ? `<img class="cover" loading="lazy" src="${esc(cleanImageUrl(p.cover_image))}" alt="" role="presentation" />` : "";
+    const tag = (p.tags && p.tags[0]) ? esc(p.tags[0]) : "Turismo";
+    const tagLink = (p.tags && p.tags[0])
+      ? `<span class="tag"><a href="/tag/${esc(slugTag(p.tags[0]))}/">${tag}</a></span>`
+      : `<span class="tag">${tag}</span>`;
+    const date = p.published_at ? `<time datetime="${esc(p.published_at)}">${new Date(p.published_at).toLocaleDateString("pt-BR")}</time>` : "";
+    return `<article class="post">
+      <a href="/post/${esc(p.slug)}/" aria-hidden="true" tabindex="-1">${img}</a>
+      <div class="body">
+        <div class="meta">${tagLink}${date ? `<span class="time">${date}</span>` : ""}</div>
+        <h2><a href="/post/${esc(p.slug)}/">${esc(p.title)}</a></h2>
+        <p class="summary">${esc(p.summary || "")}</p>
+        <a class="more" href="/post/${esc(p.slug)}/">Ler artigo completo</a>
+      </div>
+    </article>`;
+  }).join("") || "<p>Nenhum artigo publicado ainda.</p>";
+}
+
 async function home(request, origin) {
   let posts = [];
   try {
@@ -327,22 +389,7 @@ async function home(request, origin) {
   } catch (e) {
     // Fallback: ainda renderiza a página mas com aviso
   }
-const cards = posts.map((p) => {
-    const img = p.cover_image ? `<img class="cover" loading="lazy" src="${esc(cleanImageUrl(p.cover_image))}" alt="" role="presentation" />` : "";
-    const tag = (p.tags && p.tags[0]) ? esc(p.tags[0]) : "Turismo";
-    const date = p.published_at ? `<time datetime="${esc(p.published_at)}">${new Date(p.published_at).toLocaleDateString("pt-BR")}</time>` : "";
-    return `<article class="post">
-      <a href="/post/${esc(p.slug)}/" aria-hidden="true" tabindex="-1">${img}</a>
-      <div class="body">
-        <div class="meta"><span class="tag">${tag}</span>${date ? `<span class="time">${date}</span>` : ""}</div>
-        <h2><a href="/post/${esc(p.slug)}/">${esc(p.title)}</a></h2>
-        <p class="summary">${esc(p.summary || "")}</p>
-        <a class="more" href="/post/${esc(p.slug)}/">Ler artigo completo</a>
-      </div>
-    </article>`;
-  }).join("") || "<p>Nenhum artigo publicado ainda.</p>";
-
-  const body = `<h1 class="sr">Últimos artigos</h1>${cards}`;
+  const body = `<h1 class="sr">Últimos artigos</h1>${cardsHtml(posts)}`;
   return new Response(
     page({
       type: "website",
@@ -374,7 +421,15 @@ async function postPage(request, origin, slug) {
   const readTime = post.content
     ? Math.max(1, Math.round(post.content.split(/\s+/).length / 200))
     : null;
-  const tags = (post.tags || []).map((tag) => `<span class="tag">${esc(String(tag).trim())}</span>`).join("");
+  const tags = (post.tags || []).map((tag) => {
+    const t = String(tag).trim();
+    return `<span class="tag"><a href="/tag/${esc(slugTag(t))}/">${esc(t)}</a></span>`;
+  }).join("");
+  const toc = [];
+  const content = mdToHtml(post.content, toc);
+  const tocHtml = toc.length >= 2
+    ? `<nav class="toc" aria-label="Neste artigo"><p class="toc-title">Neste artigo</p><ol>${toc.map((t) => `<li><a href="#${esc(t.id)}">${esc(t.text)}</a></li>`).join("")}</ol></nav>`
+    : "";
 
   const body = `<nav class="crumb"><a href="/" aria-label="Voltar para a página inicial">← Voltar ao blog</a></nav>
     <article class="post post-single">
@@ -382,7 +437,8 @@ async function postPage(request, origin, slug) {
       <div class="body">
         <div class="meta">${tags || `<span class="tag">${esc(post.category || "Turismo")}</span>`}${date ? `<span class="time">${date}</span>` : ""}${readTime ? `<span class="time">· ${readTime} min de leitura</span>` : ""}</div>
         <h1>${esc(post.title)}</h1>
-        <div class="content">${mdToHtml(post.content)}</div>
+        ${tocHtml}
+        <div class="content">${content}</div>
       </div>
     </article>`;
   return new Response(
@@ -397,6 +453,37 @@ async function postPage(request, origin, slug) {
       post,
       body,
       jsonld: postJsonLd(post),
+    }),
+    { headers: secured({ "Content-Type": "text/html; charset=utf-8" }) }
+  );
+}
+
+async function tagPage(request, origin, tag) {
+  const lower = tag.toLowerCase();
+  let posts = [];
+  try {
+    posts = await fetchPosts();
+  } catch (e) {
+    // Fallback: página renderizada mesmo sem API
+  }
+  const filtered = posts.filter((p) =>
+    (p.tags || []).some((t) => String(t).toLowerCase() === lower)
+  );
+  const pretty = tag.replace(/-/g, " ");
+  const prettyTitle = pretty.charAt(0).toUpperCase() + pretty.slice(1);
+  const desc = `Artigos sobre ${prettyTitle}.`;
+  const body = `<nav class="crumb"><a href="/" aria-label="Voltar para a página inicial">← Voltar ao blog</a></nav>
+    <h1 class="page-title">Artigos: ${esc(prettyTitle)}</h1>
+    ${filtered.length ? cardsHtml(filtered) : "<p>Nenhum artigo publicado com essa tag ainda.</p>"}`;
+  return new Response(
+    page({
+      type: "website",
+      title: `Artigos sobre ${prettyTitle} — ${DEFAULT_TITLE}`,
+      desc,
+      canonical: `${origin}/tag/${esc(slugTag(pretty))}/`,
+      origin,
+      body,
+      jsonld: blogJsonLd(),
     }),
     { headers: secured({ "Content-Type": "text/html; charset=utf-8" }) }
   );
@@ -446,6 +533,12 @@ Sitemap: ${origin}/sitemap.xml
 ${links}
 </urlset>`;
       return new Response(body, { headers: secured({ "Content-Type": "application/xml; charset=utf-8" }) });
+    }
+
+    // Página de tag: /tag/<tag>/
+    if (path.startsWith("/tag/")) {
+      const tag = decodeURIComponent(path.slice("/tag/".length).replace(/\/+$/, ""));
+      if (tag) return tagPage(request, origin, tag);
     }
 
     // Slug real: /post/<slug>/
