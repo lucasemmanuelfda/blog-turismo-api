@@ -324,13 +324,13 @@ def test_images_never_use_lorem_placeholder(mocker):
 
     mocker.patch.object(get_settings(), "validate_images", True)
 
-    mocker.patch("app.services.images._commons", return_value=[])
+    mocker.patch("app.services.images._wikimedia_search", return_value=[])
     urls = image_urls("gramado", n=3)
     assert len(urls) == 3
     assert all("picsum.photos" in u for u in urls)
 
     mocker.patch(
-        "app.services.images._commons",
+        "app.services.images._wikimedia_search",
         return_value=[f"https://thumb.wikimedia.org/t{i}.jpg" for i in range(1, 4)],
     )
     urls_ok = image_urls("gramado", n=3)
@@ -345,7 +345,7 @@ def test_refresh_images_and_attribution(mocker):
     mocker.patch.object(get_settings(), "validate_images", True)
     content = "texto\n\n![antiga](https://loremflickr.com/1200/600/x?lock=1)\n\nmais texto"
     mocker.patch(
-        "app.services.images._commons",
+        "app.services.images._wikimedia_search",
         return_value=[f"https://thumb.wikimedia.org/f{i}.jpg" for i in range(1, 4)],
     )
     r = client.post(
@@ -365,3 +365,15 @@ def test_refresh_images_and_attribution(mocker):
     assert "wikimedia.org" in (body["cover_image"] or "")
 
     assert "Fotos: Wikimedia Commons" not in add_attribution("x", ["https://picsum.photos/a.jpg"])
+
+
+def test_slugify_boundaries():
+    from app.services import slugify, unique_slug
+
+    assert slugify("Serra Gaúcha") == "serra-gaucha"
+    assert slugify("Roteiro -- de 3 dias") == "roteiro-de-3-dias"
+    assert slugify("  Espaços  e  hífens  ") == "espacos-e-hifens"
+    assert len(slugify("a" * 300)) == 200
+    assert unique_slug("praia", []) == "praia"
+    assert unique_slug("praia", ["praia"]) == "praia-2"
+    assert unique_slug("praia", ["praia", "praia-2"]) == "praia-3"

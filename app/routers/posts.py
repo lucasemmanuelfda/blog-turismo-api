@@ -23,16 +23,16 @@ _STOPWORDS = {
 
 def _image_keyword(post: models.Post) -> str:
     """Descobre a palavra-chave de imagens: URL antiga do post, depois título."""
-    from app.services.images import _commons
+    from app.services.images import has_commons_image
 
     old = re.search(r"loremflickr\.com/\d+/\d+/([^/?]+)", post.content or "")
-    if old and _commons(old.group(1), 1):
+    if old and has_commons_image(old.group(1)):
         return old.group(1)
     words = re.sub(r"[^a-z0-9\s]", "", (post.title or "").lower()).split()
     for word in words[::-1]:
         if word.isdigit() or word in _STOPWORDS or len(word) < 3:
             continue
-        if _commons(word, 1):
+        if has_commons_image(word):
             return word
     return words[-1] if words else (post.title or "travel")
 

@@ -32,9 +32,3 @@ def unique_slug(text: str, existing_slugs: list[str]) -> str:
 
 def serialize_list(values: list[str]) -> str:
     return json.dumps(values, ensure_ascii=False)
-
-
-def build_meta_title(title: str, max_len: int = 60) -> str:
-    if len(title) <= max_len:
-        return title
-    return title[: max_len - 1].rstrip() + "…"

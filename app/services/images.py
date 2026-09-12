@@ -1,9 +1,12 @@
+import logging
 import re
 import urllib.parse
 from urllib.parse import quote
 
 from app.config import get_settings
 from app.services import http_get_json
+
+logger = logging.getLogger(__name__)
 
 # 16:9 fixo: Wikimedia Commons redimensiona proporcionalmente e o frontend
 # recorta com object-fit: cover — sem hotlink com margens (padrão do LoremFlickr).
@@ -12,7 +15,7 @@ WIDTH, HEIGHT = 1200, 600
 ATTRIBUTION = "*Fotos: Wikimedia Commons.*"
 
 
-def _commons(keyword: str, n: int) -> list[str]:
+def _wikimedia_search(keyword: str, n: int) -> list[str]:
     """Fotos livres do Wikimedia Commons relacionadas à palavra-chave."""
     params = urllib.parse.urlencode(
         {
@@ -41,20 +44,26 @@ def _commons(keyword: str, n: int) -> list[str]:
             if thumb and info.get("mime", "").startswith("image/"):
                 out.append(thumb.split("&", 1)[0])
         return out[:n]
-    except Exception:
+    except Exception as exc:
+        logger.warning("Wikimedia Commons indisponível: %s", exc)
         return []
+
+
+def has_commons_image(keyword: str) -> bool:
+    """True se o Wikimedia Commons tem foto para a palavra-chave."""
+    return bool(_wikimedia_search(keyword, 1))
 
 
 def _picsum(keyword: str, variant: int) -> str:
     return f"https://picsum.photos/seed/{quote(keyword)}-{variant}/{WIDTH}/{HEIGHT}"
 
 
-def image_urls(topic: str, n: int = 3, width: int = WIDTH, height: int = HEIGHT) -> list[str]:
+def image_urls(topic: str, n: int = 3) -> list[str]:
     """n imagens 16:9 por tema (nunca placeholder/margem sólida)."""
     keyword = (topic.strip() or "travel").split()[0].lower() or "travel"
     if not get_settings().validate_images:
         return [_picsum(keyword, i) for i in range(1, n + 1)]
-    urls = _commons(keyword, n)
+    urls = _wikimedia_search(keyword, n)
     if not urls:
         urls = [_picsum(keyword, i) for i in range(1, n + 1)]
     return urls[:n]
