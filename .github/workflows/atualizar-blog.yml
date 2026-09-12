@@ -1,0 +1,44 @@
+name: Atualizar blog (gera, publica e deploys)
+
+on:
+  schedule:
+    # 03h UTC = meia-noite no horario de Brasilia
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gerar artigos do dia
+        run: |
+          curl -sS -X POST "${{ vars.API_URL }}/generate/daily?publish=true" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_KEY }}" \
+            -H "Content-Type: application/json" \
+            -w "\nHTTP %{http_code}\n"
+
+      - name: Publicar todos os posts agendados
+        run: |
+          # Render free dorme em inatividade e derruba a 1a conexao (curl 56) no cold start.
+          retry_curl() { curl -sS --retry 6 --retry-delay 15 --retry-all-errors "$@"; }
+          ids=$(retry_curl "${{ vars.API_URL }}/posts?status=scheduled&limit=50" | jq -r '.[].id')
+          if [ -z "$ids" ]; then echo "Nenhum post agendado."; exit 0; fi
+          for id in $ids; do
+            code=$(retry_curl -o /dev/null -w "%{http_code}" -X POST "${{ vars.API_URL }}/posts/$id/publish" -H "Authorization: Bearer ${{ secrets.ADMIN_KEY }}" || true)
+            echo "Post $id -> HTTP $code"
+          done
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Test worker localmente
+        run: node worker/test-worker.mjs
+
+      - name: Deploy no Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -8,7 +8,7 @@ Repo público de um blog de turismo com geração de conteúdo por IA.
 
 - `app/` — API FastAPI (Python). `config.py` lê tudo de `.env` via pydantic-settings.
 - `worker/` — Cloudflare Worker (frontend SSR: sitemap, robots, JSON-LD, HTML indexável).
-- `.github/workflows/` — daily-generate (cron via API), publish-now e deploy-worker (Wrangler).
+- `.github/workflows/` — `atualizar-blog.yml`: um único workflow faz tudo (gerar artigos + publicar agendados + deploy do worker). Roda à meia-noite (cron) ou manualmente. Não exige push para o worker publicar — rodar manualmente após editar o `worker/`.
 
 ## Comandos
 
@@ -16,8 +16,7 @@ Repo público de um blog de turismo com geração de conteúdo por IA.
 python -m uvicorn app.main:app --reload   # dev, http://127.0.0.1:8000/docs
 pytest tests                              # testes da API
 node worker/test-worker.mjs               # testes do worker
-gh workflow run daily-generate.yml        # publica o dia (gera + agenda posts) sem acompanhar — usar sempre
-gh workflow run publish-now.yml           # publica na hora todos os posts agendados pendentes
+gh workflow run atualizar-blog.yml        # gera + publica + deploy do worker, sem acompanhar — usar sempre
 ```
 
 ## Segurança (repo público)
