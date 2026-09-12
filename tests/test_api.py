@@ -23,6 +23,21 @@ memory.data = {"topics": {}}
 client = TestClient(app)
 
 
+def _llm_response(llm_content: str):
+    """Resposta fake no formato da API OpenAI (chat.completions)."""
+
+    class FakeMessage:
+        content = llm_content
+
+    class FakeChoice:
+        message = FakeMessage()
+
+    class FakeResponse:
+        choices = [FakeChoice()]
+
+    return FakeResponse()
+
+
 def test_health():
     r = client.get("/health")
     assert r.status_code == 200
@@ -139,23 +154,13 @@ def test_fallback_uses_groq_when_primary_fails(mocker):
 
     _json_content = '{"title":"T","meta_title":"T","meta_description":"d","summary":"s","content":"' + ("x" * 400) + '","keywords":["a"],"tags":["b"]}'
 
-    class FakeMsg:
-        content = _json_content
-
-    class FakeChoice:
-        message = FakeMsg()
-
-    class FakeResp:
-        choices = [FakeChoice()]
-
     def boom(**kw):
         raise RuntimeError("primario fora")
 
-    def grok_ok(**kw):
-        return FakeResp()
-
     fake_primary = _SN(chat=_SN(completions=_SN(create=mocker.Mock(side_effect=boom))))
-    fake_fallback = _SN(chat=_SN(completions=_SN(create=mocker.Mock(side_effect=grok_ok))))
+    fake_fallback = _SN(
+        chat=_SN(completions=_SN(create=mocker.Mock(return_value=_llm_response(_json_content))))
+    )
 
     fake_settings = _SN(
         ai_model="g", ai_fallback_model="f", ai_api_key="k", ai_base_url="u",
@@ -182,18 +187,9 @@ def test_generate_forces_fallback_provider(mocker):
 
     _json_content = '{"title":"Groq","meta_title":"Groq","meta_description":"d","summary":"s","content":"' + ("g" * 400) + '","keywords":["a"],"tags":["b"]}'
 
-    class FakeMsg:
-        content = _json_content
-
-    class FakeChoice:
-        message = FakeMsg()
-
-    class FakeResp:
-        choices = [FakeChoice()]
-
     fake_primary = _SN(chat=_SN(completions=_SN(create=mocker.Mock())))
     fake_fallback = _SN(
-        chat=_SN(completions=_SN(create=mocker.Mock(return_value=FakeResp())))
+        chat=_SN(completions=_SN(create=mocker.Mock(return_value=_llm_response(_json_content))))
     )
     fake_settings = _SN(
         ai_model="g", ai_fallback_model="f", ai_api_key="k", ai_base_url="u",

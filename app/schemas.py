@@ -1,7 +1,10 @@
-from datetime import datetime
 import json
+from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+PostStatus = Literal["draft", "scheduled", "published"]
 
 
 class CategoryCreate(BaseModel):
@@ -24,7 +27,7 @@ class PostBase(BaseModel):
     summary: str = ""
     content: str = ""
     cover_image: str | None = None
-    status: str = "draft"
+    status: PostStatus = "draft"
     scheduled_at: datetime | None = None
     keywords: list[str] = []
     tags: list[str] = []
@@ -42,7 +45,7 @@ class PostUpdate(BaseModel):
     summary: str | None = None
     content: str | None = None
     cover_image: str | None = None
-    status: str | None = None
+    status: PostStatus | None = None
     scheduled_at: datetime | None = None
     keywords: list[str] | None = None
     tags: list[str] | None = None
@@ -61,7 +64,7 @@ class PostRead(BaseModel):
     content: str
     cover_image: str | None
     image_prompt: str | None
-    status: str
+    status: PostStatus
     scheduled_at: datetime | None
     published_at: datetime | None
     keywords: list[str]
@@ -96,7 +99,3 @@ class GenerateRequest(BaseModel):
 class GenerateResponse(BaseModel):
     post: PostRead
     message: str
-
-
-class PublishCount(BaseModel):
-    published: int
