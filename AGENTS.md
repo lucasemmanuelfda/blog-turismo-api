@@ -1,5 +1,7 @@
 # AGENTS.md
 
+Instruções lidas pelo **opencode** ao trabalhar neste repositório.
+
 Repo público de um blog de turismo com geração de conteúdo por IA.
 
 ## Stack e estrutura
