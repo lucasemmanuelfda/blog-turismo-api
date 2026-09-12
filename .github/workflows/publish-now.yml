@@ -1,0 +1,17 @@
+name: Publicar agora
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publicar todos os posts agendados
+        run: |
+          ids=$(curl -sS "${{ vars.API_URL }}/posts?status=scheduled&limit=50" | jq -r '.[].id')
+          if [ -z "$ids" ]; then echo "Nenhum post agendado."; exit 0; fi
+          for id in $ids; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${{ vars.API_URL }}/posts/$id/publish" -H "Authorization: Bearer ${{ secrets.ADMIN_KEY }}")
+            echo "Post $id -> HTTP $code"
+          done
