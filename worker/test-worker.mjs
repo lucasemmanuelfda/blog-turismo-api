@@ -31,8 +31,18 @@ function fakePost(now = new Date().toISOString()) {
 
 const posts = [fakePost()];
 
-globalThis.fetch = async (input) => {
+let lastAdminAuth = null;
+globalThis.fetch = async (input, init) => {
   const url = String(input);
+  const opts = init || {};
+  if (url.endsWith("/auth/login")) {
+    lastAdminAuth = opts?.headers?.Authorization || null;
+    return jsonResponse({ token: "9999999999.abc", admin: true, expires_in: 86400 });
+  }
+  if (url.endsWith("/posts/1/publish")) {
+    lastAdminAuth = opts?.headers?.Authorization || null;
+    return jsonResponse(posts[0]);
+  }
   if (url.includes("/posts/roteiro-de-3-dias-em-gramado")) {
     return jsonResponse(posts[0]);
   }
@@ -68,8 +78,8 @@ async function run() {
   check("home link artigo", home.includes('/post/roteiro-de-3-dias-em-gramado/'));
   check("home skip link", home.includes('Pular para o conteúdo principal'));
   check("home imagem role presentation", /role="presentation"/.test(home));
-  check("home hero destaque", home.includes('class="hero"'));
-  check("home grade de cards", home.includes('class="post-grid"'));
+  check("home hero destaque", home.includes('class="card hero'));
+  check("home grade de cards", home.includes('class="row g-4 post-grid"'));
   check("home secao recentes", home.includes('Artigos recentes'));
   check("home link favicon", home.includes('rel="icon"'));
 
@@ -96,16 +106,16 @@ async function run() {
   check("post figure img", /<figure class="img"><img src="https:\/\/thumb\.wikimedia\.org\/t1\.jpg"/.test(post));
   check("post imagem cai query utm", !post.includes("utm_source"));
   check("post JSON-LD BlogPosting", post.includes('"@type":"BlogPosting"'));
-  check("post h1", /<h1>Roteiro de 3 Dias em Gramado<\/h1>/.test(post));
-  check("post volta ao blog", /<a href="\/">Início<\/a>\s*<span aria-hidden="true">›<\/span>/.test(post));
-  check("post breadcrumb atual", post.includes('aria-current="page">Roteiro de 3 Dias em Gramado</span>'));
+  check("post h1", post.includes('<h1 class="h2 mb-4">Roteiro de 3 Dias em Gramado</h1>'));
+  check("post volta ao blog", /\<li class="breadcrumb-item"\><a href="\/">Início<\/a>\<\/li\>/.test(post));
+  check("post breadcrumb atual", post.includes('aria-current="page">Roteiro de 3 Dias em Gramado</li>'));
   check("post tempo de leitura", /min de leitura/.test(post));
-  check("post toc", post.includes('class="toc"'));
+  check("post toc", post.includes('class="card toc'));
   check("post toc ancora h2", post.includes('<h2 id="por-que-visitar">'));
-  check("post toc link", post.includes('href="#por-que-visitar">Por que visitar</a>'));
+  check("post toc link", post.includes('href="#por-que-visitar"') && post.includes('>Por que visitar</a>'));
   check("post progress bar", post.includes('class="progress"'));
-  check("post layout center stage", post.includes('class="layout"'));
-  check("post kit afiliado", post.includes('class="kit"'));
+  check("post layout center stage", post.includes('class="row g-4 layout"'));
+  check("post kit afiliado", post.includes('class="kit mt-5"'));
   check("post kit item da IA", post.includes("Jaqueta corta-vento"));
   check("post kit item note", post.includes("encarar o vento da serra"));
   check("post kit tag amazon", post.includes("tag=blogturismo20-20"));
@@ -146,6 +156,50 @@ async function run() {
   check("sitemap post loc", sm.includes(`<loc>${SITE}/post/roteiro-de-3-dias-em-gramado/</loc>`));
   check("sitemap lastmod YYYY-MM-DD", /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/.test(sm));
   check("sitemap lastmod sem horario", !/T\d{2}/.test(sm));
+
+  // Painel admin
+  const adminNoCookie = await worker.fetch(new Request(SITE + "/admin"), {}, {});
+  const adminPage = await adminNoCookie.text();
+  check("admin login sem sessao", adminPage.includes('action="/admin/login"'));
+  check("admin noindex", adminPage.includes('content="noindex, nofollow"'));
+
+  const loginRes = await worker.fetch(
+    new Request(SITE + "/admin/login", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: "password=teste123",
+    }),
+    {},
+    {}
+  );
+  check("admin login 302", loginRes.status === 302);
+  const setCookie = loginRes.headers.get("Set-Cookie") || "";
+  check("admin cookie sessao", setCookie.includes("admin_token=") && setCookie.includes("HttpOnly"));
+
+  const dashRes = await worker.fetch(
+    new Request(SITE + "/admin", { headers: { Cookie: "admin_token=9999999999.abc" } }),
+    {},
+    {}
+  );
+  const dash = await dashRes.text();
+  check("admin dashboard gerar", dash.includes("Gerar artigo"));
+  check("admin dashboard status", dash.includes("Rascunhos") && dash.includes("Agendados") && dash.includes("Publicados"));
+  check("admin mostra post", dash.includes("Roteiro de 3 Dias em Gramado"));
+
+  const pubRes = await worker.fetch(
+    new Request(SITE + "/admin/publish", {
+      method: "POST",
+      headers: { Cookie: "admin_token=9999999999.abc", "content-type": "application/x-www-form-urlencoded" },
+      body: "id=1",
+    }),
+    {},
+    {}
+  );
+  check("admin publicar 302", pubRes.status === 302);
+  check("admin publicar usa token", lastAdminAuth === "Bearer 9999999999.abc");
+
+  const logoutRes = await worker.fetch(new Request(SITE + "/admin/logout", { method: "POST" }), {}, {});
+  check("admin logout 302", logoutRes.status === 302);
 
   process.exit(failures ? 1 : 0);
 }

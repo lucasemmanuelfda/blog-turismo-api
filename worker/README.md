@@ -1,7 +1,9 @@
 # Worker Cloudflare — Site do Blog Turismo IA (SSR)
 
 Este worker serve o blog com **HTML índice-ável** (Google, Bing, e agentes de IA:
-ChatGPT, Perplexity, Claude etc.), sem depender de JavaScript no cliente.
+ChatGPT, Perplexity, Claude etc.). O layout usa **Bootstrap 5** (CDN) e todo o
+conteúdo é renderizado no servidor; JavaScript no cliente só habilita a navbar
+responsiva, sem afetar a leitura.
 
 O que ele faz:
 
@@ -9,8 +11,15 @@ O que ele faz:
 |---|---|
 | `/` | Página inicial com cards dos posts publicados + JSON-LD `Blog` + Open Graph |
 | `/post/<slug>/` | Artigo completo renderizado no servidor (HTML puro) + JSON-LD `BlogPosting` + canonical + Open Graph |
+| `/tag/<tag>/` | Lista de posts de uma tag |
+| `/admin` | Painel admin: login com a senha `ADMIN_KEY`; gera rascunhos, publica, regenera kit/imagens e exclui posts |
 | `/robots.txt` | Permite todos os bots (`User-agent: *`) e aponta o `Sitemap` |
 | `/sitemap.xml` | Sitemap dinâmico com todos os posts publicados |
+
+O painel em `/admin` troca a senha por um **token de sessão curto** emitido pela
+API (`POST /auth/login`, cookie `admin_token` HttpOnly). As ações são
+formulários SSR (sem JS): **Gerar artigo**, **Publicar**, **Imagens**,
+**Kit** e **Excluir**. Páginas admin são `noindex`.
 
 Acessibilidade: link "pular para o conteúdo", `lang=pt-BR`, landmarks semânticos,
 `alt` nas imagens (decorativas com `role="presentation"`), contraste adaptado ao

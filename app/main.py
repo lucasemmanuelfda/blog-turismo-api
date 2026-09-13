@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import models
 from app.config import get_settings
 from app.database import Base, engine, migrate
-from app.routers import categories, generate, posts
+from app.routers import auth, categories, generate, posts
 from app import scheduler as scheduler_module
 
 logging.basicConfig(level=logging.INFO)
@@ -47,6 +47,7 @@ app.add_middleware(
 app.include_router(posts.router)
 app.include_router(categories.router)
 app.include_router(generate.router)
+app.include_router(auth.router)
 
 
 @app.get("/")

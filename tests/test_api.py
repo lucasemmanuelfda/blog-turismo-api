@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_blog.db")
 os.environ.setdefault("ADMIN_KEY", "teste123")
+os.environ["ADMIN_PASSWORD_HASH"] = ""  # testes de login usam ADMIN_KEY; hash real é testado à parte
 os.environ.setdefault("MEMORY_FILE", "test_memory.json")
 os.environ.setdefault("DAILY_TOPICS", "Destino A,Destino B")
 os.environ.setdefault("VALIDATE_IMAGES", "false")
@@ -403,3 +404,206 @@ def test_slugify_boundaries():
     assert unique_slug("praia", []) == "praia"
     assert unique_slug("praia", ["praia"]) == "praia-2"
     assert unique_slug("praia", ["praia", "praia-2"]) == "praia-3"
+
+
+# ---------------------------------------------------------------------------
+# Pesquisa leve (NewsAPI) antes da geração
+# ---------------------------------------------------------------------------
+
+def test_research_returns_empty_when_no_key(mocker):
+    from app.config import get_settings
+    from app.services.research import research
+
+    mocker.patch.object(get_settings(), "news_api_key", "")
+    assert research("bonito") == ""
+
+
+def test_research_returns_snippets(mocker):
+    from app.config import get_settings
+    from app.services import research as mod
+
+    mocker.patch.object(get_settings(), "news_api_key", "chave-fake")
+    mocker.patch(
+        "app.services.research.http_get_json",
+        return_value={
+            "articles": [
+                {"title": "Guia Bonito MS", "description": "Dicas de flutuação."},
+                {"title": "Guia Bonito MS", "description": "Dicas de flutuação."},
+                {"title": "Búzios na páscoa", "description": "Festa"},
+            ]
+        },
+    )
+    out = mod.research("bonito ms")
+    assert "Guia Bonito MS. Dicas de flutuação." in out
+    assert out.count("Bonito") == 1  # deduplicado
+    assert "Búzios" in out
+
+
+def test_research_handles_http_error(mocker):
+    from app.config import get_settings
+    from app.services.research import research
+
+    mocker.patch.object(get_settings(), "news_api_key", "k")
+    mocker.patch(
+        "app.services.research.http_get_json",
+        side_effect=RuntimeError("timeout"),
+    )
+    assert research("gramado") == ""
+
+
+def test_research_injects_into_generate_prompt(mocker):
+    from types import SimpleNamespace as _SN
+
+    from app.config import get_settings
+    from app.services import ai as ai_module
+
+    mocker.patch.object(get_settings(), "news_api_key", "k")
+    captured: dict = {}
+
+    def fake_research(topic, limit=6, timeout=12.0):
+        captured["topic"] = topic
+        return "- fato real de pesquisa"
+
+    mocker.patch.object(ai_module, "research", side_effect=fake_research)
+
+    fake_content = (
+        '{"title":"Guia de Bonito","meta_title":"Guia de Bonito",'
+        '"meta_description":"desc","summary":"resumo","content":"'
+        + ("T" * 400)
+        + '","keywords":["bonito"],"tags":["ms"]}'
+    )
+    fake_client = _SN(
+        chat=_SN(completions=_SN(create=mocker.Mock(return_value=_llm_response(fake_content))))
+    )
+    fake_settings = _SN(
+        ai_model="m", ai_api_key="k", ai_base_url="u",
+        ai_fallback_api_key="", ai_fallback_base_url="", ai_fallback_model="",
+        ai_language="pt-BR",
+    )
+    orig = (ai_module.ai_service.client, ai_module.ai_service.settings)
+    ai_module.ai_service.client = fake_client
+    ai_module.ai_service.settings = fake_settings
+    try:
+        out = ai_module.ai_service.generate_travel_post("Bonito MS")
+    finally:
+        (ai_module.ai_service.client, ai_module.ai_service.settings) = orig
+
+    assert out["title"] == "Guia de Bonito"
+    assert captured.get("topic") == "Bonito MS"
+    messages = fake_client.chat.completions.create.call_args.kwargs["messages"]
+    assert any("fato real de pesquisa" in m["content"] for m in messages)
+
+
+# ---------------------------------------------------------------------------
+# Login do painel admin (tokens de sessão)
+# ---------------------------------------------------------------------------
+
+def test_admin_login_success():
+    from app.config import get_settings
+
+    r = client.post("/auth/login", json={"password": get_settings().admin_key})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["admin"] is True
+    assert body["token"]
+    assert body["expires_in"] > 0
+
+
+def test_admin_login_wrong_password():
+    r = client.post("/auth/login", json={"password": "senha-errada"})
+    assert r.status_code == 401
+
+
+def test_admin_token_grants_write_access():
+    from app.config import get_settings
+
+    r = client.post("/auth/login", json={"password": get_settings().admin_key})
+    token = r.json()["token"]
+
+    r = client.post(
+        "/posts",
+        json={"title": "Post via token", "summary": "s", "content": "# T\n\n" + ("y" * 350)},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["is_ai_generated"] is False
+    client.delete(f"/posts/{r.json()['id']}", headers={"Authorization": "Bearer teste123"})
+
+
+def test_forged_admin_token_rejected():
+    r = client.post(
+        "/posts",
+        json={"title": "x", "content": "y"},
+        headers={"Authorization": "Bearer 9999999999.4d616c6963696f7573"},
+    )
+    assert r.status_code == 401
+
+
+def test_expired_admin_token_rejected():
+    from app.config import get_settings
+    from app.routers.deps import make_admin_token
+
+    expired = make_admin_token(get_settings().admin_key, ttl_seconds=-1)
+    r = client.post(
+        "/posts",
+        json={"title": "x", "content": "y"},
+        headers={"Authorization": f"Bearer {expired}"},
+    )
+    assert r.status_code == 401
+
+
+def test_admin_login_without_key():
+    from app.config import get_settings
+
+    orig = get_settings().admin_key
+    get_settings().admin_key = ""
+    try:
+        r = client.post("/auth/login", json={"password": "qualquer"})
+    finally:
+        get_settings().admin_key = orig
+    assert r.status_code == 401
+
+
+def test_admin_login_with_password_hash():
+    import bcrypt
+
+    from app.config import get_settings
+
+    settings = get_settings()
+    saved = (settings.admin_key, settings.admin_password_hash)
+    settings.admin_key = ""
+    settings.admin_password_hash = bcrypt.hashpw(b"senha-do-painel", bcrypt.gensalt()).decode()
+    try:
+        r = client.post("/auth/login", json={"password": "senha-do-painel"})
+        assert r.status_code == 200, r.text
+        assert r.json()["token"]
+        token = r.json()["token"]
+
+        r = client.post(
+            "/posts",
+            json={"title": "Post via hash", "summary": "s", "content": "# T\n\n" + ("q" * 350)},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 201, r.text
+        client.delete(f"/posts/{r.json()['id']}", headers={"Authorization": f"Bearer {token}"})
+
+        r = client.post("/auth/login", json={"password": "senha-errada"})
+        assert r.status_code == 401
+    finally:
+        settings.admin_key, settings.admin_password_hash = saved
+
+
+def test_admin_login_rejects_broken_hash():
+    import bcrypt  # noqa: F401  (garante que bcrypt está instalado)
+
+    from app.config import get_settings
+
+    settings = get_settings()
+    saved = (settings.admin_key, settings.admin_password_hash)
+    settings.admin_key = ""
+    settings.admin_password_hash = "hash-bcrypt-invalido"
+    try:
+        r = client.post("/auth/login", json={"password": "qualquer"})
+        assert r.status_code == 401
+    finally:
+        settings.admin_key, settings.admin_password_hash = saved

@@ -7,6 +7,7 @@ from openai import OpenAI
 
 from app.config import get_settings
 from app.services.memory import memory
+from app.services.research import research
 
 
 def _clean_kit(raw: Any) -> list[dict[str, str]]:
@@ -130,10 +131,17 @@ Regras técnicas (mantenha):
         audience = target_audience or "viajantes em geral"
 
         memory_context = memory.context_block(topic)
+        research_context = research(topic)
+        research_block = (
+            "\nPesquisa rápida na internet (use como referência factual; NÃO invente "
+            f"dados além deles; prefira dados concretos destes trechos):\n{research_context}\n"
+            if research_context
+            else ""
+        )
         user_prompt = f"""
 Crie um artigo de turismo sobre: "{topic}".
 Categoria do blog: {category or "geral"}.
-Público-alvo: {audience}.
+Público-alvo: {audience}.{research_block}
 
 Memória do blog (fatos já apurados e títulos já publicados — NÃO repita títulos,
 reutilize os fatos com coerência):

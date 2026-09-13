@@ -2,12 +2,20 @@
  * Cloudflare Worker — Site do Blog Turismo IA (Server-Side Rendering)
  *
  * Serve o blog com HTML indexável por crawlers (Google) e por IA (ChatGPT / Facebook / etc.
- * via Open Graph + JSON-LD), sem depender de JavaScript no cliente.
+ * via Open Graph + JSON-LD), sem depender de JavaScript para ler o conteúdo.
+ * Layout base (Bootstrap 5 via CDN): navbar responsiva, cards, dark mode por CSS.
  *
- * Deploy: `wrangler deploy` (ou via GitHub Actions em .github/workflows/deploy-worker.yml).
+ * Painel admin em /admin: login com a senha ADMIN_KEY (trocada por token curto na API),
+ * gerar artigos, publicar, regenerar kit/imagens e excluir.
+ *
+ * Deploy: `wrangler deploy` (ou via GitHub Actions em .github/workflows/atualizar-blog.yml).
  */
 
 const API_BASE_URL = "https://blog-turismo-api.onrender.com";
+
+// Sessão do painel admin: nome do cookie + prefixo de rota das ações
+const ADMIN_COOKIE = "admin_token";
+const ADMIN_ROOT = "/admin";
 
 const DEFAULT_TITLE = "Blog Turismo IA";
 const DEFAULT_DESC =
@@ -16,10 +24,10 @@ const DEFAULT_DESC =
 // ---------- Utilitários ----------
 
 // Headers de segurança aplicados em todas as respostas.
-// O site não usa JS nem iframes; script-src 'none' e frame-ancestors 'none' são seguros.
+// O site lê o conteúdo sem JS (só o Bootstrap usa script, vindo do CDN).
 const SECURITY_HEADERS = {
   "Content-Security-Policy":
-    "default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; script-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests",
+    "default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -155,31 +163,59 @@ function mdToHtml(md, toc) {
   return out.join("\n");
 }
 
-// ---------- Layout (template HTML compartilhado) ----------
+// ---------- Layout (Bootstrap 5.3 via CDN + tema da marca) ----------
+
+function publicNav() {
+  return `<nav class="navbar navbar-expand-lg navbar-dark blognav sticky-top py-3" aria-label="Navegação principal">
+  <div class="container">
+    <a class="navbar-brand fw-bold fs-4" href="/">Blog Turismo IA</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu" aria-controls="navMenu" aria-expanded="false" aria-label="Abrir menu de navegação">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMenu">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item"><a class="nav-link active" aria-current="page" href="/">Início</a></li>
+      </ul>
+      <span class="navbar-text small opacity-75">Destinos, roteiros e dicas de viagem.</span>
+    </div>
+  </div>
+</nav>`;
+}
+
+function adminNav() {
+  return `<nav class="navbar navbar-expand navbar-dark blognav sticky-top py-3" aria-label="Navegação do painel">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="${ADMIN_ROOT}">Blog Turismo IA <span class="badge text-bg-warning align-middle">admin</span></a>
+    <form class="d-flex" method="post" action="${ADMIN_ROOT}/logout">
+      <button class="btn btn-sm btn-outline-light" type="submit">Sair</button>
+    </form>
+  </div>
+</nav>`;
+}
 
 function page(t) {
   const ogImage =
     cleanImageUrl(t.image) ||
     (t.post && t.post.cover_image ? cleanImageUrl(t.post.cover_image) : "");
-  const canonical = t.canonical || t.origin + "/";
-  const robotsMeta = t.robots ? `<meta name="robots" content="${t.robots}">` : "";
+  const canonical = t.canonical || (t.admin ? t.origin + ADMIN_ROOT : t.origin + "/");
+  const robots = t.robots || "index, follow";
   const gscMeta = GOOGLE_SITE_VERIFICATION
     ? `<meta name="google-site-verification" content="${esc(GOOGLE_SITE_VERIFICATION)}">`
     : "";
+  const nav = t.admin ? adminNav() : publicNav();
   return `<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0f7490">
+<meta name="robots" content="${robots}">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="shortcut icon" href="/favicon.svg">
 ${gscMeta}
 <title>${esc(t.title)}</title>
 <meta name="description" content="${esc(t.desc)}">
 <link rel="canonical" href="${esc(canonical)}">
-${robotsMeta}
-<meta name="robots" content="index, follow">
 <meta property="og:type" content="${t.type}">
 <meta property="og:site_name" content="Blog Turismo IA">
 <meta property="og:title" content="${esc(t.ogTitle || t.title)}">
@@ -189,140 +225,76 @@ ${ogImage ? `<meta property="og:image" content="${esc(ogImage)}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="${esc(ogImage)}">` : `<meta name="twitter:card" content="summary">`}
 ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3/dist/css/bootstrap.min.css">
 <style>
 :root {
   color-scheme: light dark;
-  --bg:#f6f3ee; --card:#fff; --text:#20262e; --muted:#6b7683;
-  --accent:#0e7490; --accent2:#6d28d9; --line:#e4e1da;
-  --shadow:0 1px 2px rgba(24,32,40,.05), 0 12px 32px -12px rgba(24,32,40,.18);
-  --radius:18px;
+  --brand-1:#0e7490;
+  --brand-2:#6d28d9;
+  --bs-body-bg:#f6f3ee;
+  --bs-body-color:#20262e;
+  --bs-body-font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --bs-body-font-size:1.05rem;
+  --bs-body-line-height:1.7;
+  --bs-link-color:#0e7490;
+  --bs-link-hover-color:#0b5970;
+  --bs-link-decoration:none;
+  --bs-border-radius:.9rem;
+  --bs-border-radius-lg:1.25rem;
+  --bs-card-bg:#fff;
+  --bs-card-border-color:#e7e3dc;
+  --bs-card-border-radius:1.25rem;
+  --bs-secondary-color:#6b7683;
+  --bs-tertiary-bg:#efece5;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg:#10151c; --card:#182029; --text:#e4ebf2; --muted:#93a0ae; --line:#29323d;
-    --shadow:0 1px 2px rgba(0,0,0,.3), 0 14px 36px -14px rgba(0,0,0,.5); }
+  :root {
+    --bs-body-bg:#10151c;
+    --bs-body-color:#e4ebf2;
+    --bs-link-color:#53b6d4;
+    --bs-link-hover-color:#7bcbe4;
+    --bs-card-bg:#182029;
+    --bs-card-border-color:#2b3540;
+    --bs-secondary-color:#93a0ae;
+    --bs-tertiary-bg:#151c24;
+  }
 }
-* { box-sizing:border-box; }
-html { scroll-behavior:smooth; }
-body { margin:0; font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  font-size:16.5px; line-height:1.7; background:var(--bg); color:var(--text);
-  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
-::selection { background:rgba(14,116,144,.25); }
-a { color:var(--accent); }
-:focus-visible { outline:3px solid var(--accent); outline-offset:2px; border-radius:4px; }
-.header { position:relative; overflow:hidden; background:linear-gradient(140deg,#0f7490,#54139b 80%);
-  color:#fff; padding:56px 20px 64px; text-align:center; }
-.header::after { content:""; position:absolute; inset:0; pointer-events:none;
-  background:radial-gradient(120% 120% at 80% -20%, rgba(255,255,255,.22), transparent 55%); }
-.header h1 { position:relative; margin:0; font-size:clamp(1.9rem,6vw,2.8rem); font-weight:750; letter-spacing:-.5px; line-height:1.15; }
-.header h1 a { color:#fff; text-decoration:none; }
-.header h1 a:hover { text-decoration:underline; text-underline-offset:4px; }
-.header p { position:relative; margin:10px auto 0; max-width:42ch; opacity:.92; font-size:1.06rem; }
-.container { max-width:1000px; margin:-34px auto 64px; padding:0 18px; }
-.post-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(285px,1fr)); gap:26px; align-items:stretch; }
-.post-grid .post { margin:0; height:100%; display:flex; flex-direction:column; }
-.post-grid .post .cover { height:200px; }
-.post-grid .body { display:flex; flex-direction:column; flex:1; }
-.post-grid .more { margin-top:auto; }
-.hero { display:grid; grid-template-columns:1fr 1.05fr; margin-bottom:36px; background:var(--card);
-  border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
-.hero .cover { width:100%; height:100%; min-height:300px; object-fit:cover; }
-.hero .body { padding:clamp(22px,4vw,40px); display:flex; flex-direction:column; justify-content:center; gap:16px; }
-.hero .tag { align-self:flex-start; }
-.hero h2 { margin:0; font-size:clamp(1.6rem,4vw,2.3rem); font-weight:750; line-height:1.15; letter-spacing:-.5px; }
-.hero h2 a { color:inherit; text-decoration:none; }
-.hero h2 a:hover { color:var(--accent); }
-.hero .summary { margin:0; font-size:1.08rem; }
-@media (max-width:820px) {
-  .hero { grid-template-columns:1fr; }
-  .hero .cover { min-height:200px; }
-}
-.section-title { margin:6px 0 24px; font-size:.82rem; text-transform:uppercase; letter-spacing:.08em;
-  color:var(--muted); display:flex; align-items:center; gap:14px; }
-.section-title::after { content:""; height:1px; flex:1; background:var(--line); }
-.post { background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
-  box-shadow:var(--shadow); overflow:hidden; margin-bottom:30px; transition:transform .18s ease, box-shadow .18s ease; }
-.post:hover { transform:translateY(-2px); box-shadow:0 2px 4px rgba(24,32,40,.06), 0 18px 40px -14px rgba(24,32,40,.22); }
-.cover { width:100%; height:240px; object-fit:cover; display:block; background:var(--line); }
-.post:hover .cover { filter:brightness(1.04); }
-.body { padding:22px 26px 26px; }
-.meta { display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:.82rem; color:var(--muted); margin-bottom:12px; }
-.tag { display:inline-block; background:rgba(14,116,144,.13); color:var(--accent); font-size:.74rem; font-weight:650; letter-spacing:.06em; text-transform:uppercase; padding:5px 12px; border-radius:999px; }
-.post h2 { margin:0 0 8px; font-size:1.42rem; font-weight:720; line-height:1.3; letter-spacing:-.2px; }
-.post h2 a { color:inherit; text-decoration:none; }
-.post h2 a:hover { color:var(--accent); }
-.summary { color:var(--muted); margin:0 0 18px; }
-.more { display:inline-flex; align-items:center; gap:6px; font-weight:650; text-decoration:none; }
-.more::after { content:"→"; transition:transform .15s ease; }
-.more:hover::after { transform:translateX(3px); }
-.crumb { margin:0 0 20px; font-size:.92rem; color:var(--muted); }
-.crumb a { color:var(--muted); text-decoration:none; }
-.crumb a:hover { color:var(--accent); text-decoration:underline; }
-.crumb span[aria-current="page"] { color:var(--text); font-weight:650; }
+.blognav { background:linear-gradient(140deg,#0f7490,#54139b 80%); }
+.blognav .navbar-toggler { border-color:rgba(255,255,255,.4); }
+.navbar-toggler-icon { filter:invert(1); }
 .progress { position:fixed; top:0; left:0; width:100%; height:3px; transform:scaleX(0); transform-origin:0 50%;
-  background:linear-gradient(90deg,var(--accent),var(--accent2)); z-index:20; pointer-events:none; }
+  background:linear-gradient(90deg,#0e7490,#6d28d9); z-index:1050; pointer-events:none; }
 @supports (animation-timeline: scroll()) {
   .progress { animation:progress-grow linear; animation-timeline:scroll(root); }
 }
 @keyframes progress-grow { to { transform:scaleX(1); } }
-.page-title { margin:0 0 22px; font-size:clamp(1.5rem,4vw,2rem); letter-spacing:-.3px; }
-.tag a { color:inherit; text-decoration:none; }
-.toc { background:rgba(14,116,144,.06); border:1px solid var(--line); border-radius:14px;
-  padding:16px 20px; height:fit-content; }
-.toc-title { margin:0 0 8px; font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
-.toc ol { margin:0; padding-left:1.2em; display:grid; gap:6px; }
-.toc a { color:var(--accent); text-decoration:none; }
-.toc a:hover { text-decoration:underline; }
-.layout { display:grid; gap:30px; margin-top:2px; }
-@media (min-width:1024px) {
-  .layout { grid-template-columns:minmax(0,1fr) 230px; align-items:start; }
-  .content { grid-column:1; grid-row:1; }
-  .toc { grid-column:2; grid-row:1; position:sticky; top:88px; margin:0; }
-}
-.post-single { padding-bottom:10px; }
-.post-single .cover { border-radius:var(--radius) var(--radius) 0 0; }
-.post-single h1 { margin:.1em 0 .5em; font-size:clamp(1.7rem,4.5vw,2.3rem); line-height:1.22; letter-spacing:-.4px; }
+.hero .cover-img { min-height:300px; }
+.post-card { height:100%; transition:transform .18s ease, box-shadow .18s ease; }
+.post-card:hover { transform:translateY(-3px); box-shadow:0 14px 30px -14px rgba(24,32,40,.28)!important; }
+.cover-img { display:block; background:var(--bs-secondary-color,#ddd); }
+.post-hero-card .card-body { font-size:1.05rem; }
+.toc-sticky { position:sticky; top:88px; }
 .content { font-size:1.05rem; line-height:1.78; }
-.content h1,.content h2,.content h3 { line-height:1.32; margin:1.7em 0 .55em; letter-spacing:-.2px; }
-.content h1 { font-size:1.85rem; } .content h2 { font-size:1.42rem; } .content h3 { font-size:1.15rem; }
+.content h1, .content h2, .content h3 { line-height:1.32; margin:1.7em 0 .55em; letter-spacing:-.2px; }
 .content p { margin:.85em 0; }
-.content .img, .content figure.img { margin:1.6em 0; }
-.content img { width:100%; height:auto; aspect-ratio:16/9; object-fit:cover; border-radius:14px; display:block; background:var(--line); }
+.content img { width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:14px; display:block; background:var(--bs-secondary-color,#ddd); }
+.content figure.img { margin:1.6em 0; }
 .content ul, .content ol { padding-left:1.3em; margin:.85em 0; }
-.content li { margin:.35em 0; }
-.content strong { font-weight:700; }
 code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em; border-radius:6px; font-size:.9em; }
-.kit { margin:2.4em 0 0; }
-.kit h2 { font-size:1.28rem; letter-spacing:-.2px; margin:0 0 .3em; }
-.kit-disclosure { color:var(--muted); font-size:.85em; line-height:1.6; margin:0 0 1.1em; }
-.kit-grid { list-style:none; margin:0; padding:0; display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); }
-.kit-card { display:flex; gap:14px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); transition:transform .15s ease, box-shadow .15s ease; }
-.kit-card:hover { transform:translateY(-2px); box-shadow:0 8px 24px -10px rgba(24,32,40,.3); }
-.kit-num { flex:none; width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff; font-size:.85rem; font-weight:700; display:grid; place-items:center; }
-.kit-info h3 { font-size:1rem; line-height:1.35; margin:0 0 .3em; }
-.kit-info h3 a { color:var(--text); text-decoration:none; }
-.kit-info p { color:var(--muted); font-size:.87em; line-height:1.55; margin:0 0 .55em; }
-.kit-cta { display:inline-block; color:var(--accent); font-size:.85rem; font-weight:600; text-decoration:none; }
-.kit-cta:hover { text-decoration:underline; }
-.footer { text-align:center; color:var(--muted); font-size:.85em; padding:0 18px 44px; }
-.footer a { color:var(--muted); text-decoration:none; border-bottom:1px dotted var(--muted); }
-.sr { position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden; }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation:none !important; transition:none !important; }
-  html { scroll-behavior:auto; }
-}
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 </style>
 </head>
-<body>
-<a class="sr" href="#principal">Pular para o conteúdo principal</a>
+<body class="d-flex flex-column min-vh-100">
+<a class="visually-hidden-focusable" href="#principal">Pular para o conteúdo principal</a>
 <div class="progress" aria-hidden="true"></div>
-<header class="header">
-  <h1><a href="/">Blog Turismo IA</a></h1>
-  <p>Destinos, roteiros e dicas de viagem.</p>
-</header>
-<main id="principal" class="container">
+${nav}
+<main id="principal" class="container py-4 flex-grow-1">
 ${t.body}
 </main>
-<footer class="footer"><a href="/">Blog Turismo IA</a> · Conteúdo informativo gerado automaticamente todos os dias. Fotos: Wikimedia Commons.</footer>
+<footer class="footer text-center text-body-secondary small py-4 px-3">
+  <a class="link-body-emphasis" href="/">Blog Turismo IA</a> · Conteúdo informativo gerado automaticamente todos os dias · <a class="link-secondary" href="${ADMIN_ROOT}">Painel</a>
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3/dist/js/bootstrap.bundle.min.js" defer></script>
 </body>
 </html>`;
 }
@@ -356,7 +328,7 @@ function postJsonLd(a) {
   });
 }
 
-// ---------- Carregamento de dados da API ----------
+// ---------- Acesso à API ----------
 
 async function fetchPosts(limit = 30) {
   const u = `${API_BASE_URL}/posts?status=published&limit=${limit}`;
@@ -372,21 +344,71 @@ async function fetchPost(slug) {
   return res.json();
 }
 
-// ---------- Roteador (Home e Posts) ----------
-
-// Slug funcional: prefixo até o ponto (a "trilha" nos links preserva o slug completo,
-// mas o double slash é reescrito para dentro do path).
-function handleSlugUrl(origin, path) {
-  // Aceitar /post/slug ou /<slug> direto
-  let slug;
-  if (path.startsWith("/post/")) {
-    slug = path.slice("/post/".length);
-  } else {
-    slug = path.replace(/^\//, "");
-  }
-  if (!slug) return null;
-  return decodeURIComponent(slug.split("/")[0]);
+async function apiCall(path, { method = "GET", token, body } = {}) {
+  const headers = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  return fetch(API_BASE_URL + path, {
+    method,
+    headers,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
 }
+
+// ---------- Sessão admin (cookie HttpOnly à prova das rotas /admin) ----------
+
+function readCookie(request, name) {
+  const header = request.headers && typeof request.headers.get === "function"
+    ? request.headers.get("Cookie")
+    : "";
+  for (const part of String(header || "").split(";")) {
+    const i = part.indexOf("=");
+    if (i === -1) continue;
+    if (part.slice(0, i).trim() === name) {
+      const value = part.slice(i + 1).trim();
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+function tokenExpired(token) {
+  const i = token.indexOf(".");
+  if (i <= 0) return true;
+  const exp = Number(token.slice(0, i));
+  return !Number.isFinite(exp) || exp * 1000 < Date.now();
+}
+
+function adminRedirect(location, setCookie) {
+  const headers = { Location: location };
+  if (setCookie) headers["Set-Cookie"] = setCookie;
+  return new Response(null, { status: 302, headers });
+}
+
+function adminSessionCookie(token, maxAge) {
+  return `admin_token=${encodeURIComponent(token)}; Path=${ADMIN_ROOT}; HttpOnly; SameSite=Lax; Secure; Max-Age=${Math.max(0, Math.floor(maxAge))}`;
+}
+
+function clearAdminCookie() {
+  return `admin_token=; Path=${ADMIN_ROOT}; HttpOnly; SameSite=Lax; Secure; Max-Age=0`;
+}
+
+async function adminPosts(status, token) {
+  try {
+    const res = await apiCall(`/posts?status=${status}&limit=50`, { token });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+// ---------- Site público ----------
 
 function slugTag(t) {
   return encodeURIComponent(String(t).toLowerCase().replace(/\s+/g, "-"));
@@ -394,22 +416,41 @@ function slugTag(t) {
 
 function cardsHtml(posts) {
   return posts.map((p) => {
-    const img = p.cover_image ? `<img class="cover" loading="lazy" src="${esc(cleanImageUrl(p.cover_image))}" alt="" role="presentation" />` : "";
-    const tag = (p.tags && p.tags[0]) ? esc(p.tags[0]) : "Turismo";
-    const tagLink = (p.tags && p.tags[0])
-      ? `<span class="tag"><a href="/tag/${esc(slugTag(p.tags[0]))}/">${tag}</a></span>`
-      : `<span class="tag">${tag}</span>`;
+    const img = p.cover_image
+      ? `<a class="d-block ratio ratio-16x9" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100" loading="lazy" src="${esc(cleanImageUrl(p.cover_image))}" alt="" role="presentation" /></a>`
+      : "";
+    const tag = (p.tags && p.tags[0])
+      ? `<a class="badge rounded-pill text-bg-secondary text-decoration-none" href="/tag/${esc(slugTag(p.tags[0]))}/">${esc(p.tags[0])}</a>`
+      : "";
     const date = p.published_at ? `<time datetime="${esc(p.published_at)}">${new Date(p.published_at).toLocaleDateString("pt-BR")}</time>` : "";
-    return `<article class="post">
-      <a href="/post/${esc(p.slug)}/" aria-hidden="true" tabindex="-1">${img}</a>
-      <div class="body">
-        <div class="meta">${tagLink}${date ? `<span class="time">${date}</span>` : ""}</div>
-        <h2><a href="/post/${esc(p.slug)}/">${esc(p.title)}</a></h2>
-        <p class="summary">${esc(p.summary || "")}</p>
-        <a class="more" href="/post/${esc(p.slug)}/">Ler artigo completo</a>
+    return `<article class="col-md-6 col-lg-4">
+      <div class="card post-card h-100 border-0 shadow-sm">
+        ${img}
+        <div class="card-body d-flex flex-column">
+          <div class="d-flex flex-wrap align-items-center gap-2 small text-body-secondary mb-2">${tag ? `<span>${tag}</span>` : ""}${date ? `<span>${date}</span>` : ""}</div>
+          <h2 class="h5 card-title mb-2"><a class="text-decoration-none link-body-emphasis" href="/post/${esc(p.slug)}/">${esc(p.title)}</a></h2>
+          <p class="card-text text-body-secondary flex-grow-1 small">${esc(p.summary || "")}</p>
+          <a class="btn btn-sm btn-outline-primary align-self-start mt-2" href="/post/${esc(p.slug)}/">Ler artigo completo →</a>
+        </div>
       </div>
     </article>`;
-  }).join("") || "<p>Nenhum artigo publicado ainda.</p>";
+  }).join("") || `<div class="col-12"><p class="text-body-secondary mb-0">Nenhum artigo publicado ainda.</p></div>`;
+}
+
+function heroHtml(p) {
+  return `<article class="card hero border-0 shadow-sm mb-5 overflow-hidden">
+  <div class="row g-0">
+    <div class="col-md-6">
+      <a class="d-block h-100" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100 h-100" loading="eager" src="${esc(cleanImageUrl(p.cover_image))}" alt="" role="presentation" /></a>
+    </div>
+    <div class="col-md-6 d-flex flex-column justify-content-center p-4 p-md-5">
+      <span class="badge rounded-pill text-bg-primary align-self-start mb-3">${esc((p.tags && p.tags[0]) || "Turismo")}</span>
+      <h2 class="card-title h1 mb-3"><a class="text-decoration-none link-body-emphasis" href="/post/${esc(p.slug)}/">${esc(p.title)}</a></h2>
+      <p class="card-text text-body-secondary mb-4">${esc(p.summary || "")}</p>
+      <a class="btn btn-dark align-self-start" href="/post/${esc(p.slug)}/">Ler artigo completo</a>
+    </div>
+  </div>
+</article>`;
 }
 
 async function home(request, origin) {
@@ -422,22 +463,15 @@ async function home(request, origin) {
   let hero = "";
   let grid = posts;
   if (posts[0] && posts[0].cover_image) {
-    const p = posts[0];
-    hero = `<article class="hero">
-      <a href="/post/${esc(p.slug)}/" aria-hidden="true" tabindex="-1"><img class="cover" loading="eager" src="${esc(cleanImageUrl(p.cover_image))}" alt="" role="presentation" /></a>
-      <div class="body">
-        <span class="tag">${esc((p.tags && p.tags[0]) || "Turismo")}</span>
-        <h2><a href="/post/${esc(p.slug)}/">${esc(p.title)}</a></h2>
-        <p class="summary">${esc(p.summary || "")}</p>
-        <a class="more" href="/post/${esc(p.slug)}/">Ler artigo completo</a>
-      </div>
-    </article>`;
+    hero = heroHtml(posts[0]);
     grid = posts.slice(1);
   }
-  const body = `<h1 class="sr">Últimos artigos</h1>
+  const body = `<h1 class="visually-hidden">Últimos artigos</h1>
 ${hero}
-<h2 class="section-title">Artigos recentes</h2>
-<div class="post-grid">${cardsHtml(grid)}</div>`;
+<div class="d-flex align-items-center mb-3">
+  <h2 class="h6 text-uppercase text-body-secondary mb-0">Artigos recentes</h2>
+</div>
+<div class="row g-4 post-grid">${cardsHtml(grid)}</div>`;
   return new Response(
     page({
       type: "website",
@@ -472,20 +506,22 @@ function kitHtml(post) {
   const items = kit
     .map((item, i) => {
       const url = amazonSearchLink(item.query || item.name);
-      return `<li class="kit-card">
-      <span class="kit-num" aria-hidden="true">${i + 1}</span>
-      <div class="kit-info">
-        <h3><a rel="nofollow noopener" href="${url}">${esc(item.name)}</a></h3>
-        ${item.note ? `<p>${esc(item.note)}</p>` : ""}
-        <a class="kit-cta" rel="nofollow noopener" href="${url}">Ver na Amazon<span aria-hidden="true"> →</span></a>
+      return `<div class="col-md-4">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-body">
+          <span class="badge rounded-pill text-bg-primary mb-2" aria-hidden="true">${i + 1}</span>
+          <h3 class="h6 mb-2"><a class="text-decoration-none link-body-emphasis" rel="nofollow noopener" href="${url}">${esc(item.name)}</a></h3>
+          ${item.note ? `<p class="small text-body-secondary mb-3">${esc(item.note)}</p>` : ""}
+          <a class="btn btn-sm btn-outline-primary" rel="nofollow noopener" href="${url}">Ver na Amazon</a>
+        </div>
       </div>
-    </li>`;
+    </div>`;
     })
     .join("");
-  return `<section class="kit" aria-label="Kit recomendado para essa viagem">
-  <h2>Kit recomendado para essa viagem</h2>
-  <p class="kit-disclosure">Alguns links desta página são de afiliado da Amazon. Se você comprar por eles, o blog ganha uma pequena comissão sem custo extra para você.</p>
-  <ul class="kit-grid">${items}</ul>
+  return `<section class="kit mt-5" aria-label="Kit recomendado para essa viagem">
+  <h2 class="h4 mb-1">Kit recomendado para essa viagem</h2>
+  <p class="text-body-secondary small mb-3">Alguns links desta página são de afiliado da Amazon. Se você comprar por eles, o blog ganha uma pequena comissão sem custo extra para você.</p>
+  <div class="row g-3">${items}</div>
 </section>`;
 }
 
@@ -508,27 +544,32 @@ async function postPage(request, origin, slug) {
     : null;
   const tags = (post.tags || []).map((tag) => {
     const t = String(tag).trim();
-    return `<span class="tag"><a href="/tag/${esc(slugTag(t))}/">${esc(t)}</a></span>`;
+    return `<a class="badge rounded-pill text-bg-secondary text-decoration-none" href="/tag/${esc(slugTag(t))}/">${esc(t)}</a>`;
   }).join("");
   const toc = [];
   const content = mdToHtml(post.content, toc);
   const tocHtml = toc.length >= 2
-    ? `<nav class="toc" aria-label="Neste artigo"><p class="toc-title">Neste artigo</p><ol>${toc.map((t) => `<li><a href="#${esc(t.id)}">${esc(t.text)}</a></li>`).join("")}</ol></nav>`
+    ? `<aside class="col-lg-3"><nav class="card toc border-0 shadow-sm toc-sticky p-3" aria-label="Neste artigo"><p class="small text-uppercase text-body-secondary mb-2">Neste artigo</p><ol class="list-unstyled small mb-0 d-grid gap-2">${toc.map((t) => `<li><a href="#${esc(t.id)}" class="text-decoration-none">${esc(t.text)}</a></li>`).join("")}</ol></nav></aside>`
     : "";
+  const meta = `<div class="d-flex flex-wrap align-items-center gap-2 text-body-secondary small mb-3">${tags ? `<span class="d-flex gap-2">${tags}</span>` : ""}${date ? `<span>${date}</span>` : ""}${readTime ? `<span>· ${readTime} min de leitura</span>` : ""}</div>`;
 
-  const body = `<nav class="crumb" aria-label="Trilha de navegação"><a href="/">Início</a> <span aria-hidden="true">›</span> <span aria-current="page">${esc(post.title)}</span></nav>
-    <article class="post post-single">
-      ${post.cover_image ? `<img class="cover" loading="lazy" src="${esc(cleanImageUrl(post.cover_image))}" alt="${esc(post.title)}" />` : ""}
-      <div class="body">
-        <div class="meta">${tags || `<span class="tag">${esc(post.category || "Turismo")}</span>`}${date ? `<span class="time">${date}</span>` : ""}${readTime ? `<span class="time">· ${readTime} min de leitura</span>` : ""}</div>
-        <h1>${esc(post.title)}</h1>
-        <div class="layout">
-          ${tocHtml}
-          <div class="content">${content}</div>
-        </div>
-        ${kitHtml(post)}
+  const body = `<nav aria-label="breadcrumb"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Início</a></li>
+  <li class="breadcrumb-item active" aria-current="page">${esc(post.title)}</li>
+</ol></nav>
+<article class="post post-single">
+  <div class="card border-0 shadow-sm overflow-hidden">
+    ${post.cover_image ? `<img class="cover-img w-100 post-cover" loading="lazy" src="${esc(cleanImageUrl(post.cover_image))}" alt="${esc(post.title)}" />` : ""}
+    <div class="card-body p-4 p-md-5">
+      ${meta}
+      <h1 class="h2 mb-4">${esc(post.title)}</h1>
+      <div class="row g-4 layout">
+        ${tocHtml ? `<div class="col-lg-9 content">${content}</div>${tocHtml}` : `<div class="col-lg-12 content">${content}</div>`}
       </div>
-    </article>`;
+      ${kitHtml(post)}
+    </div>
+  </div>
+</article>`;
   return new Response(
     page({
       type: "article",
@@ -560,9 +601,14 @@ async function tagPage(request, origin, tag) {
   const pretty = tag.replace(/-/g, " ");
   const prettyTitle = pretty.charAt(0).toUpperCase() + pretty.slice(1);
   const desc = `Artigos sobre ${prettyTitle}.`;
-  const body = `<nav class="crumb" aria-label="Trilha de navegação"><a href="/">Início</a> <span aria-hidden="true">›</span> <span aria-current="page">Artigos: ${esc(prettyTitle)}</span></nav>
-    <h1 class="page-title">Artigos: ${esc(prettyTitle)}</h1>
-    <div class="post-grid">${filtered.length ? cardsHtml(filtered) : "<p>Nenhum artigo publicado com essa tag ainda.</p>"}</div>`;
+  const body = `<nav aria-label="breadcrumb"><ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Início</a></li>
+  <li class="breadcrumb-item active" aria-current="page">Artigos: ${esc(prettyTitle)}</li>
+</ol></nav>
+<div class="mb-3">
+  <h1 class="h2 mb-0">Artigos: ${esc(prettyTitle)}</h1>
+</div>
+<div class="row g-4 post-grid">${filtered.length ? cardsHtml(filtered) : `<div class="col-12"><p class="text-body-secondary mb-0">Nenhum artigo publicado com essa tag ainda.</p></div>`}</div>`;
   return new Response(
     page({
       type: "website",
@@ -577,13 +623,238 @@ async function tagPage(request, origin, tag) {
   );
 }
 
+// ---------- Painel admin (SSR, formulários sem JS) ----------
+
+function adminLoginPage(url) {
+  const erro = url.searchParams.get("erro");
+  const body = `<div class="mx-auto" style="max-width:400px">
+${erro ? `<div class="alert alert-danger" role="alert">${esc(erro)}</div>` : ""}
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-4 p-md-5">
+    <h1 class="h4 mb-1">Painel do blog</h1>
+    <p class="text-body-secondary small mb-4">Entre com a senha de administrador (ADMIN_KEY).</p>
+    <form method="post" action="${ADMIN_ROOT}/login">
+      <div class="mb-3">
+        <label class="form-label" for="admin-password">Senha</label>
+        <input class="form-control" type="password" id="admin-password" name="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-primary w-100" type="submit">Entrar</button>
+    </form>
+  </div>
+</div>
+</div>`;
+  return new Response(
+    page({
+      type: "website",
+      title: `Painel — ${DEFAULT_TITLE}`,
+      desc: "Painel administrativo do blog",
+      body,
+      admin: true,
+      robots: "noindex, nofollow",
+      origin: url.origin,
+    }),
+    { headers: secured({ "Content-Type": "text/html; charset=utf-8" }) }
+  );
+}
+
+function postAdminRow(post) {
+  const isPublishable = post.status === "draft" || post.status === "scheduled";
+  const publicUrl = post.status === "published" ? `/post/${esc(post.slug)}/` : null;
+  const scheduledAt = post.scheduled_at
+    ? `<div class="small text-body-secondary">Agendado para ${esc(new Date(post.scheduled_at).toLocaleString("pt-BR"))}</div>`
+    : "";
+  return `<div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+  <div class="flex-grow-1">
+    <div class="fw-semibold text-truncate">${esc(post.title)} <span class="text-body-secondary small">#${post.id}</span></div>
+    <div class="small text-body-secondary text-truncate">${esc((post.summary || post.meta_description || "").slice(0, 110))}</div>
+    ${scheduledAt}
+  </div>
+  ${publicUrl ? `<a class="btn btn-sm btn-outline-secondary" href="${publicUrl}" target="_blank" rel="noopener">Ver</a>` : ""}
+  ${isPublishable ? `<form method="post" action="${ADMIN_ROOT}/publish"><input type="hidden" name="id" value="${post.id}"><button class="btn btn-sm btn-primary" type="submit">Publicar</button></form>` : ""}
+  <form method="post" action="${ADMIN_ROOT}/refresh-images"><input type="hidden" name="id" value="${post.id}"><button class="btn btn-sm btn-outline-primary" type="submit">Imagens</button></form>
+  <form method="post" action="${ADMIN_ROOT}/kit"><input type="hidden" name="id" value="${post.id}"><button class="btn btn-sm btn-outline-primary" type="submit">Kit</button></form>
+  <form method="post" action="${ADMIN_ROOT}/delete"><input type="hidden" name="id" value="${post.id}"><button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button></form>
+</div>`;
+}
+
+function statusSection(title, badgeClass, posts) {
+  const rows = posts.length
+    ? posts.map(postAdminRow).join("")
+    : `<div class="list-group-item text-body-secondary">Nenhum post.</div>`;
+  return `<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-transparent d-flex align-items-center gap-2">
+    <h2 class="h5 mb-0">${title}</h2>
+    <span class="badge ${badgeClass}">${posts.length}</span>
+  </div>
+  <div class="list-group list-group-flush">${rows}</div>
+</div>`;
+}
+
+async function adminDashboard(request, url) {
+  const token = readCookie(request, ADMIN_COOKIE);
+  if (!token) return adminLoginPage(url);
+  if (tokenExpired(token)) {
+    const loginUrl = new URL(url);
+    loginUrl.searchParams.set("erro", "Sessão expirada — entre novamente");
+    return adminLoginPage(loginUrl);
+  }
+  const msg = url.searchParams.get("msg");
+  const erro = url.searchParams.get("erro");
+  const flash = msg
+    ? `<div class="alert alert-success" role="alert">${esc(msg)}</div>`
+    : erro
+      ? `<div class="alert alert-danger" role="alert">${esc(erro)}</div>`
+      : "";
+
+  const [published, scheduled, drafts] = await Promise.all([
+    adminPosts("published", token),
+    adminPosts("scheduled", token),
+    adminPosts("draft", token),
+  ]);
+
+  const body = `<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1 class="h3 mb-0">Painel</h1>
+  <span class="text-body-secondary small">Sessão ativa</span>
+</div>
+${flash}
+<form class="card border-0 shadow-sm mb-4" method="post" action="${ADMIN_ROOT}/generate">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Gerar artigo</h2>
+    <div class="row g-2">
+      <div class="col"><input class="form-control" type="text" name="topic" placeholder="Tema (ex.: Roteiro de 2 dias em Paraty)" required minlength="3" maxlength="200"></div>
+      <div class="col-auto"><button class="btn btn-primary" type="submit">Gerar rascunho</button></div>
+    </div>
+  </div>
+</form>
+${statusSection("Publicados", "text-bg-success", published)}
+${statusSection("Agendados", "text-bg-warning", scheduled)}
+${statusSection("Rascunhos", "text-bg-secondary", drafts)}`;
+
+  return new Response(
+    page({
+      type: "website",
+      title: `Painel — ${DEFAULT_TITLE}`,
+      desc: "Painel administrativo do blog",
+      body,
+      admin: true,
+      robots: "noindex, nofollow",
+      origin: url.origin,
+    }),
+    { headers: secured({ "Content-Type": "text/html; charset=utf-8" }) }
+  );
+}
+
+async function adminLoginAction(request) {
+  const fd = await request.formData();
+  const password = String(fd.get("password") || "");
+  let data;
+  try {
+    const res = await apiCall("/auth/login", { method: "POST", body: { password } });
+    if (!res.ok) {
+      return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent(res.status === 401 ? "Senha incorreta" : "Falha ao entrar (" + res.status + ")"));
+    }
+    data = await res.json();
+  } catch {
+    return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("API indisponível — tente novamente"));
+  }
+  return adminRedirect(
+    ADMIN_ROOT,
+    adminSessionCookie(data.token, data.expires_in || 86400)
+  );
+}
+
+function adminLogoutAction() {
+  return adminRedirect(ADMIN_ROOT, clearAdminCookie());
+}
+
+async function adminGenerateAction(request) {
+  const token = readCookie(request, ADMIN_COOKIE);
+  if (!token) return adminRedirect(ADMIN_ROOT);
+  const fd = await request.formData();
+  const topic = String(fd.get("topic") || "").trim();
+  if (topic.length < 3) {
+    return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("Tema muito curto"));
+  }
+  try {
+    const res = await apiCall("/generate/post", { method: "POST", token, body: { topic } });
+    if (res.status === 401) {
+      return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("Sessão expirada — entre novamente"));
+    }
+    if (!res.ok) {
+      return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("Falha ao gerar (" + res.status + ")"));
+    }
+    const data = await res.json();
+    const name = (data.post && data.post.title) || topic;
+    return adminRedirect(ADMIN_ROOT + "?msg=" + encodeURIComponent((data.message || "Artigo gerado") + " — " + name));
+  } catch {
+    return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("API indisponível"));
+  }
+}
+
+async function adminPostAction(request, action) {
+  const token = readCookie(request, ADMIN_COOKIE);
+  if (!token) return adminRedirect(ADMIN_ROOT);
+  const fd = await request.formData();
+  const id = parseInt(String(fd.get("id") || ""), 10);
+  if (!Number.isInteger(id) || id <= 0) {
+    return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("ID inválido"));
+  }
+  const label =
+    action === "publish" ? "Post publicado" :
+    action === "delete" ? "Post excluído" :
+    action === "kit" ? "Kit de afiliado regenerado" :
+    "Imagens atualizadas";
+  try {
+    const method = action === "delete" ? "DELETE" : "POST";
+    const res = await apiCall(`/posts/${id}/${action}`, { method, token });
+    if (res.status === 401) {
+      return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("Sessão expirada — entre novamente"));
+    }
+    if (!res.ok) {
+      const msg = action === "delete" ? "Não foi possível excluir" : "Não foi possível executar a ação";
+      return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent(`${msg} (${res.status})`));
+    }
+    return adminRedirect(ADMIN_ROOT + "?msg=" + encodeURIComponent(label));
+  } catch {
+    return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("API indisponível"));
+  }
+}
+
 // ---------- Main / Fetch Handler ----------
+
+function handleSlugUrl(origin, path) {
+  // Aceitar /post/slug ou /<slug> direto
+  let slug;
+  if (path.startsWith("/post/")) {
+    slug = path.slice("/post/".length);
+  } else {
+    slug = path.replace(/^\//, "");
+  }
+  if (!slug) return null;
+  return decodeURIComponent(slug.split("/")[0]);
+}
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
     const origin = url.origin;
+    const method = (request.method || "GET").toUpperCase();
+
+    // Painel admin (login + ações por formulário)
+    if (path === ADMIN_ROOT || path === ADMIN_ROOT + "/" || path.startsWith(ADMIN_ROOT + "/")) {
+      if (method === "POST") {
+        if (path === ADMIN_ROOT + "/login") return adminLoginAction(request);
+        if (path === ADMIN_ROOT + "/logout") return adminLogoutAction();
+        if (path === ADMIN_ROOT + "/generate") return adminGenerateAction(request);
+        const action = path.slice((ADMIN_ROOT + "/").length);
+        if (["publish", "delete", "refresh-images", "kit"].includes(action)) {
+          return adminPostAction(request, action);
+        }
+        return adminRedirect(ADMIN_ROOT);
+      }
+      return adminDashboard(request, url);
+    }
 
     // Verificação do Google Search Console (URL prefix, método "arquivo HTML").
     // O GSC pede o arquivo /google<hex>.html contendo "google-site-verification: <nome do arquivo>".

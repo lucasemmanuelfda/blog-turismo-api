@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     port: int = 8000
 
     admin_key: str = ""
+    # Hash bcrypt da senha do painel /admin. A senha em si NUNCA é armazenada;
+    # se vazio, /auth/login aceita o próprio ADMIN_KEY como senha (legado).
+    admin_password_hash: str = ""
+    # Duração da sessão do painel admin (em horas); o token expirado exige novo login
+    admin_session_hours: int = 24
 
     # Origins (separadas por vírgula) autorizadas no CORS.
     # O frontend (workers.dev/Pages/Netlify) além do dev local.
