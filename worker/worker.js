@@ -1087,7 +1087,16 @@ export default {
         }
         return adminRedirect(ADMIN_ROOT);
       }
-      return adminDashboard(request, url);
+      // O painel nunca deve ser indexado: além do <meta robots> nas páginas,
+      // marca X-Robots-Tag em qualquer resposta do /admin.
+      const res = await adminDashboard(request, url);
+      const headers = new Headers(res.headers);
+      headers.set("X-Robots-Tag", "noindex, nofollow");
+      return new Response(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers,
+      });
     }
 
     // Verificação do Google Search Console (URL prefix, método "arquivo HTML").

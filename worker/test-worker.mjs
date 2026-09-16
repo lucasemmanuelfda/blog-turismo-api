@@ -232,6 +232,7 @@ async function run() {
   check("admin noindex", adminPage.includes('content="noindex, nofollow"'));
   check("admin login campo usuario", adminPage.includes('name="username"'));
   check("admin sem drive", !adminPage.includes("emrld.ltd"));
+  check("admin x-robots-tag", (adminNoCookie.headers.get("X-Robots-Tag") || "").includes("noindex"));
 
   const loginRes = await worker.fetch(
     new Request(SITE + "/admin/login", {
