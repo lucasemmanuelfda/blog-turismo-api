@@ -3,7 +3,7 @@
  *
  * Serve o blog com HTML indexável por crawlers (Google) e por IA (ChatGPT / Facebook / etc.
  * via Open Graph + JSON-LD), sem depender de JavaScript para ler o conteúdo.
- * Layout base (Bootstrap 5 via CDN): navbar responsiva, cards, dark mode por CSS.
+ * Layout (CSS próprio inline, sem CDN): navbar, cards, dark mode por preferência do sistema.
  *
  * Painel admin em /admin: login com a senha ADMIN_KEY (trocada por token curto na API),
  * gerar artigos, publicar, regenerar kit/imagens e excluir.
@@ -21,13 +21,17 @@ const DEFAULT_TITLE = "Blog Turismo IA";
 const DEFAULT_DESC =
   "Destinos, roteiros e dicas de viagem atualizados todos os dias, gerados por IA.";
 
+// Páginas públicas podem ser cacheadas por 5 min (Cloudflare + navegador).
+// Conteúdo muda 1x/dia; cache curto reduz o custo de repetição sem estagnar.
+const PUB_CACHE = { "Cache-Control": "public, max-age=300, s-maxage=300" };
+
 // ---------- Utilitários ----------
 
 // Headers de segurança aplicados em todas as respostas.
 // O site lê o conteúdo sem JS (só o Bootstrap usa script, vindo do CDN).
 const SECURITY_HEADERS = {
   "Content-Security-Policy":
-    "default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests",
+    "default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -77,6 +81,18 @@ function cleanImageUrl(u) {
   }
 }
 
+// Largura de thumbnail do Wikimedia. 960px é um tamanho pré-renderizado padrão dos
+// arquivos da Commons (pedir 640/800 arbitrários devolve 400), ~40% menor que o 1280px.
+const THUMB_W = 960;
+
+// Rebaixa thumbs do Wikimedia de qualquer largura para THUMB_W mantendo formato e host.
+function thumb(u) {
+  const s = String(u || "");
+  return /^https:\/\/(?:upload|thumb)\.wikimedia\.org\/wikipedia\/commons\/thumb\//.test(s)
+    ? s.replace(/\d+px-([^/]+)$/, `${THUMB_W}px-$1`)
+    : s;
+}
+
 // ---------- Markdown → HTML (SSR, sem JS) ----------
 
 function slugify(s) {
@@ -98,7 +114,7 @@ function mdToHtml(md, toc) {
   const inlineSafe = (s) =>
     esc(s)
       .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, ($0, alt, src) => {
-        return `<img src="${esc(cleanImageUrl(src))}" alt="${esc(alt || "foto")}" loading="lazy" decoding="async" />`;
+        return `<img src="${esc(thumb(cleanImageUrl(src)))}" alt="${esc(alt || "foto")}" loading="lazy" decoding="async" />`;
       })
       .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.+?)\*/g, "<em>$1</em>")
@@ -108,7 +124,7 @@ function mdToHtml(md, toc) {
     const l = lines[i];
     const img = l.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (img) {
-      out.push(`<figure class="img"><img src="${esc(cleanImageUrl(img[2]))}" alt="${esc(img[1] || "foto")}" loading="lazy" decoding="async" /></figure>`);
+      out.push(`<figure class="img"><img src="${esc(thumb(cleanImageUrl(img[2])))}" alt="${esc(img[1] || "foto")}" loading="lazy" decoding="async" /></figure>`);
       i++;
       continue;
     }
@@ -163,30 +179,22 @@ function mdToHtml(md, toc) {
   return out.join("\n");
 }
 
-// ---------- Layout (Bootstrap 5.3 via CDN + tema da marca) ----------
+// ---------- Layout (CSS inline, sem dependência de CDN) ----------
 
 function publicNav() {
-  return `<nav class="navbar navbar-expand-lg navbar-dark blognav sticky-top py-3" aria-label="Navegação principal">
-  <div class="container">
-    <a class="navbar-brand fw-bold fs-4" href="/">Blog Turismo IA</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu" aria-controls="navMenu" aria-expanded="false" aria-label="Abrir menu de navegação">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navMenu">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link active" aria-current="page" href="/">Início</a></li>
-      </ul>
-      <span class="navbar-text small opacity-75">Destinos, roteiros e dicas de viagem.</span>
-    </div>
+  return `<nav class="navbar navbar-dark blognav sticky-top py-3" aria-label="Navegação principal">
+  <div class="container d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <a class="navbar-brand fw-bold" href="/">Blog Turismo IA</a>
+    <span class="navbar-text small opacity-75">Destinos, roteiros e dicas de viagem.</span>
   </div>
 </nav>`;
 }
 
 function adminNav() {
-  return `<nav class="navbar navbar-expand navbar-dark blognav sticky-top py-3" aria-label="Navegação do painel">
-  <div class="container">
+  return `<nav class="navbar navbar-dark blognav sticky-top py-3" aria-label="Navegação do painel">
+  <div class="container d-flex flex-wrap align-items-center justify-content-between gap-2">
     <a class="navbar-brand fw-bold" href="${ADMIN_ROOT}">Blog Turismo IA <span class="badge text-bg-warning align-middle">admin</span></a>
-    <form class="d-flex" method="post" action="${ADMIN_ROOT}/logout">
+    <form class="d-flex mb-0" method="post" action="${ADMIN_ROOT}/logout">
       <button class="btn btn-sm btn-outline-light" type="submit">Sair</button>
     </form>
   </div>
@@ -194,9 +202,8 @@ function adminNav() {
 }
 
 function page(t) {
-  const ogImage =
-    cleanImageUrl(t.image) ||
-    (t.post && t.post.cover_image ? cleanImageUrl(t.post.cover_image) : "");
+  const ogImage = t.image || (t.post && t.post.cover_image ? thumb(cleanImageUrl(t.post.cover_image)) : "");
+  const preload = ogImage ? `<link rel="preload" as="image" fetchpriority="high" href="${esc(ogImage)}">` : "";
   const canonical = t.canonical || (t.admin ? t.origin + ADMIN_ROOT : t.origin + "/");
   const robots = t.robots || "index, follow";
   const gscMeta = GOOGLE_SITE_VERIFICATION
@@ -216,6 +223,7 @@ ${gscMeta}
 <title>${esc(t.title)}</title>
 <meta name="description" content="${esc(t.desc)}">
 <link rel="canonical" href="${esc(canonical)}">
+${preload}
 <meta property="og:type" content="${t.type}">
 <meta property="og:site_name" content="Blog Turismo IA">
 <meta property="og:title" content="${esc(t.ogTitle || t.title)}">
@@ -225,7 +233,6 @@ ${ogImage ? `<meta property="og:image" content="${esc(ogImage)}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="${esc(ogImage)}">` : `<meta name="twitter:card" content="summary">`}
 ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3/dist/css/bootstrap.min.css">
 <style>
 :root {
   color-scheme: light dark;
@@ -244,7 +251,7 @@ ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
   --bs-card-bg:#fff;
   --bs-card-border-color:#e7e3dc;
   --bs-card-border-radius:1.25rem;
-  --bs-secondary-color:#6b7683;
+  --bs-secondary-color:#5c6874;
   --bs-tertiary-bg:#efece5;
 }
 @media (prefers-color-scheme: dark) {
@@ -259,9 +266,87 @@ ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
     --bs-tertiary-bg:#151c24;
   }
 }
+/* ---------- Base: substitui o bootstrap.min.css do CDN (só o que o site usa) ---------- */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bs-body-bg);color:var(--bs-body-color);font-family:var(--bs-body-font-family);font-size:var(--bs-body-font-size);line-height:var(--bs-body-line-height)}
+a{color:var(--bs-link-color)}
+a:hover{color:var(--bs-link-hover-color)}
+h1,h2,h3,h4,h5,h6{font-weight:700;line-height:1.32;margin:0 0 .5rem}
+p{margin:0 0 1rem}
+ul,ol{padding-left:1.5em;margin:0 0 1rem}
+.container{width:100%;max-width:1140px;margin-inline:auto;padding-inline:1rem}
+.row{display:flex;flex-wrap:wrap;gap:1.5rem}
+.row.g-0{gap:0}.row.g-2{gap:.5rem}.row.g-3{gap:1rem}.row.g-4{gap:1.5rem}
+.row>*{width:100%;max-width:100%}
+.col{flex:1 1 0%}.col-auto{flex:0 0 auto}
+@media (min-width:768px){.col-md-6{flex:0 0 calc(50% - .75rem)}.col-md-4{flex:0 0 calc(33.333% - 1rem)}.p-md-5{padding:3rem!important}.row.g-0 .col-md-6{flex:0 0 50%}}
+@media (min-width:992px){.row.g-0 .col-lg-4{flex:0 0 33.333%}.col-lg-3{flex:0 0 calc(25% - 1.125rem)}.col-lg-4{flex:0 0 calc(33.333% - 1rem)}.col-lg-9{flex:0 0 calc(75% - .375rem)}.col-lg-12{flex:0 0 100%}}
+.navbar{display:flex;align-items:center;padding-block:.75rem}
+.navbar-dark .navbar-brand,.navbar-dark .navbar-nav .nav-link{color:#fff}
+.navbar-brand{font-weight:700;text-decoration:none}
+.navbar-text{color:rgba(255,255,255,.78)}
+.btn{display:inline-block;padding:.5rem 1rem;border:1px solid transparent;border-radius:.55rem;background:transparent;cursor:pointer;font:inherit;line-height:1.5;text-decoration:none;text-align:center}
+.btn-primary{background:var(--brand-1);color:#fff}.btn-primary:hover{background:#0b5970}
+.btn-dark{background:#20262e;color:#fff}.btn-dark:hover{background:#10151c}
+.btn-outline-primary{color:var(--brand-1);border-color:var(--brand-1)}.btn-outline-primary:hover{background:var(--brand-1);color:#fff}
+.btn-outline-secondary{color:var(--bs-secondary-color);border-color:var(--bs-secondary-color)}.btn-outline-secondary:hover{background:var(--bs-secondary-color);color:#fff}
+.btn-outline-danger{color:#dc3545;border-color:#dc3545}.btn-outline-danger:hover{background:#dc3545;color:#fff}
+.btn-outline-light{color:#fff;border-color:rgba(255,255,255,.6)}.btn-outline-light:hover{background:rgba(255,255,255,.18);color:#fff}
+.btn-sm{padding:.3rem .6rem;font-size:.875em}
+.badge{display:inline-block;padding:.42em .68em;font-size:.76em;font-weight:600;line-height:1;white-space:nowrap;border-radius:.5em}
+.rounded-pill{border-radius:50rem}
+.text-bg-primary{background:var(--brand-1);color:#fff}
+.text-bg-secondary{background:var(--bs-secondary-color);color:#fff}
+.text-bg-success{background:#198754;color:#fff}
+.text-bg-warning,.text-bg-warning a{background:#ffc107;color:#20262e}
+.text-bg-danger{background:#dc3545;color:#fff}
+.card{background:var(--bs-card-bg);border:1px solid var(--bs-card-border-color);border-radius:var(--bs-card-border-radius);display:flex;flex-direction:column}
+.border-0{border:0!important}
+.shadow-sm{box-shadow:0 .125rem .5rem rgba(24,32,40,.12)}
+.card-body{padding:1rem;flex:1 1 auto}
+.card-title{margin-bottom:.5rem;font-weight:600;line-height:1.35}
+.card-header{padding:1rem;border-bottom:1px solid var(--bs-card-border-color)}
+.card-text{margin:0}
+.breadcrumb{display:flex;flex-wrap:wrap;list-style:none;padding:0;margin:0 0 1.25rem;gap:.5rem}
+.breadcrumb-item a{color:inherit;text-decoration:none}
+.breadcrumb-item.active{color:var(--bs-secondary-color)}
+.breadcrumb-item+.breadcrumb-item::before{content:"/";margin-right:.5rem;color:var(--bs-secondary-color)}
+.form-label{display:block;margin:0 0 .5rem}
+.form-control{display:block;width:100%;padding:.5rem .75rem;border:1px solid var(--bs-card-border-color);border-radius:.55rem;background:var(--bs-card-bg);color:inherit;font:inherit}
+.form-control:focus{outline:2px solid var(--brand-1);outline-offset:1px;border-color:transparent}
+.alert{padding:1rem;border-radius:.8rem;border:1px solid transparent;margin:0 0 1rem}
+.alert-danger{color:#842029;background:#f8d7da;border-color:#f5c2c7}
+.alert-success{color:#0f5132;background:#d1e7dd;border-color:#badbcc}
+.list-group{display:flex;flex-direction:column;list-style:none;padding:0;margin:0;background:var(--bs-card-bg);border:1px solid var(--bs-card-border-color);border-radius:var(--bs-card-border-radius);overflow:hidden}
+.list-group-item{padding:.75rem 1rem;border-bottom:1px solid var(--bs-card-border-color)}
+.list-group-item:last-child{border-bottom:0}
+.ratio{position:relative;width:100%;overflow:hidden;background:var(--bs-secondary-color)}
+.ratio-16x9::before{content:"";display:block;padding-top:56.25%}
+.ratio>*{position:absolute;inset:0}
+.list-unstyled{list-style:none;padding-left:0}
+.d-grid{display:grid}
+/* ---------- Utilidades ---------- */
+.d-flex{display:flex}.d-block{display:block}.flex-wrap{flex-wrap:wrap}.flex-column{flex-direction:column}.flex-grow-1{flex-grow:1}
+.justify-content-between{justify-content:space-between}.justify-content-center{justify-content:center}
+.align-items-center{align-items:center}.align-self-start{align-self:flex-start}
+.gap-2{gap:.5rem}.gap-3{gap:1rem}
+.p-3{padding:1rem}.p-4{padding:1.5rem}.p-5{padding:3rem}.py-3{padding-block:1rem}.py-4{padding-block:1.5rem}.px-3{padding-inline:1rem}
+.mb-0{margin-bottom:0}.mb-1{margin-bottom:.25rem}.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:1rem}.mb-4{margin-bottom:1.5rem}.mb-5{margin-bottom:3rem}.mt-2{margin-top:.5rem}.mt-5{margin-top:3rem}
+.mx-auto{margin-inline:auto}.me-auto{margin-inline-end:auto}
+.text-center{text-align:center}.text-uppercase{text-transform:uppercase}.text-truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.text-body-secondary{color:var(--bs-secondary-color)}
+.link-body-emphasis{color:inherit;text-decoration:none}
+.link-secondary{color:var(--bs-secondary-color)}
+.text-decoration-none{text-decoration:none}
+.fw-bold{font-weight:700}.fw-semibold{font-weight:600}.fs-4{font-size:1.5rem}
+.h1{font-size:2.4rem}.h2{font-size:2rem}.h3{font-size:1.75rem}.h4{font-size:1.5rem}.h5{font-size:1.25rem}.h6{font-size:1rem}
+.small{font-size:.875em}.opacity-75{opacity:.75}
+.h-100{height:100%}.w-100{width:100%}.min-vh-100{min-height:100vh}.overflow-hidden{overflow:hidden}.object-fit-cover{object-fit:cover}
+.sticky-top{position:sticky;top:0;z-index:1020}.align-middle{vertical-align:middle}
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.visually-hidden-focusable:not(:focus):not(:focus-within){position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* ---------- Customizações do site ---------- */
 .blognav { background:linear-gradient(140deg,#0f7490,#54139b 80%); }
-.blognav .navbar-toggler { border-color:rgba(255,255,255,.4); }
-.navbar-toggler-icon { filter:invert(1); }
 .progress { position:fixed; top:0; left:0; width:100%; height:3px; transform:scaleX(0); transform-origin:0 50%;
   background:linear-gradient(90deg,#0e7490,#6d28d9); z-index:1050; pointer-events:none; }
 @supports (animation-timeline: scroll()) {
@@ -271,7 +356,7 @@ ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
 .hero .cover-img { min-height:300px; }
 .post-card { height:100%; transition:transform .18s ease, box-shadow .18s ease; }
 .post-card:hover { transform:translateY(-3px); box-shadow:0 14px 30px -14px rgba(24,32,40,.28)!important; }
-.cover-img { display:block; background:var(--bs-secondary-color,#ddd); }
+.cover-img { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:var(--bs-secondary-color,#ddd); }
 .post-hero-card .card-body { font-size:1.05rem; }
 .toc-sticky { position:sticky; top:88px; }
 .content { font-size:1.05rem; line-height:1.78; }
@@ -294,7 +379,6 @@ ${t.body}
 <footer class="footer text-center text-body-secondary small py-4 px-3">
   <a class="link-body-emphasis" href="/">Blog Turismo IA</a> · Conteúdo informativo gerado automaticamente todos os dias · <a class="link-secondary" href="${ADMIN_ROOT}">Painel</a>
 </footer>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3/dist/js/bootstrap.bundle.min.js" defer></script>
 </body>
 </html>`;
 }
@@ -417,7 +501,7 @@ function slugTag(t) {
 function cardsHtml(posts) {
   return posts.map((p) => {
     const img = p.cover_image
-      ? `<a class="d-block ratio ratio-16x9" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100" loading="lazy" src="${esc(cleanImageUrl(p.cover_image))}" alt="" role="presentation" /></a>`
+      ? `<a class="d-block ratio ratio-16x9" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100" loading="lazy" src="${esc(thumb(cleanImageUrl(p.cover_image)))}" alt="" role="presentation" /></a>`
       : "";
     const tag = (p.tags && p.tags[0])
       ? `<a class="badge rounded-pill text-bg-secondary text-decoration-none" href="/tag/${esc(slugTag(p.tags[0]))}/">${esc(p.tags[0])}</a>`
@@ -441,7 +525,7 @@ function heroHtml(p) {
   return `<article class="card hero border-0 shadow-sm mb-5 overflow-hidden">
   <div class="row g-0">
     <div class="col-md-6">
-      <a class="d-block h-100" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100 h-100" loading="eager" src="${esc(cleanImageUrl(p.cover_image))}" alt="" role="presentation" /></a>
+      <a class="d-block h-100" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100 h-100" loading="eager" fetchpriority="high" src="${esc(thumb(cleanImageUrl(p.cover_image)))}" alt="" role="presentation" /></a>
     </div>
     <div class="col-md-6 d-flex flex-column justify-content-center p-4 p-md-5">
       <span class="badge rounded-pill text-bg-primary align-self-start mb-3">${esc((p.tags && p.tags[0]) || "Turismo")}</span>
@@ -456,13 +540,15 @@ function heroHtml(p) {
 async function home(request, origin) {
   let posts = [];
   try {
-    posts = await fetchPosts();
+    posts = await fetchPosts(15);
   } catch (e) {
     // Fallback: ainda renderiza a página mas com aviso
   }
   let hero = "";
   let grid = posts;
+  let heroImage = "";
   if (posts[0] && posts[0].cover_image) {
+    heroImage = thumb(cleanImageUrl(posts[0].cover_image));
     hero = heroHtml(posts[0]);
     grid = posts.slice(1);
   }
@@ -479,10 +565,11 @@ ${hero}
       desc: DEFAULT_DESC,
       canonical: origin + "/",
       origin,
+      image: heroImage,
       body,
       jsonld: blogJsonLd(),
     }),
-    { headers: secured({ "Content-Type": "text/html; charset=utf-8" }) }
+    { headers: secured({ "Content-Type": "text/html; charset=utf-8", ...PUB_CACHE }) }
   );
 }
 
@@ -553,13 +640,14 @@ async function postPage(request, origin, slug) {
     : "";
   const meta = `<div class="d-flex flex-wrap align-items-center gap-2 text-body-secondary small mb-3">${tags ? `<span class="d-flex gap-2">${tags}</span>` : ""}${date ? `<span>${date}</span>` : ""}${readTime ? `<span>· ${readTime} min de leitura</span>` : ""}</div>`;
 
+  const cover = post.cover_image ? thumb(cleanImageUrl(post.cover_image)) : "";
   const body = `<nav aria-label="breadcrumb"><ol class="breadcrumb">
   <li class="breadcrumb-item"><a href="/">Início</a></li>
   <li class="breadcrumb-item active" aria-current="page">${esc(post.title)}</li>
 </ol></nav>
 <article class="post post-single">
   <div class="card border-0 shadow-sm overflow-hidden">
-    ${post.cover_image ? `<img class="cover-img w-100 post-cover" loading="lazy" src="${esc(cleanImageUrl(post.cover_image))}" alt="${esc(post.title)}" />` : ""}
+    ${cover ? `<img class="cover-img w-100 post-cover" loading="eager" fetchpriority="high" src="${esc(cover)}" alt="${esc(post.title)}" />` : ""}
     <div class="card-body p-4 p-md-5">
       ${meta}
       <h1 class="h2 mb-4">${esc(post.title)}</h1>
@@ -578,12 +666,12 @@ async function postPage(request, origin, slug) {
       ogTitle,
       canonical,
       origin,
-      image: post.cover_image,
+      image: cover,
       post,
       body,
       jsonld: postJsonLd(post),
     }),
-    { headers: secured({ "Content-Type": "text/html; charset=utf-8" }) }
+    { headers: secured({ "Content-Type": "text/html; charset=utf-8", ...PUB_CACHE }) }
   );
 }
 
@@ -619,7 +707,7 @@ async function tagPage(request, origin, tag) {
       body,
       jsonld: blogJsonLd(),
     }),
-    { headers: secured({ "Content-Type": "text/html; charset=utf-8" }) }
+    { headers: secured({ "Content-Type": "text/html; charset=utf-8", ...PUB_CACHE }) }
   );
 }
 
@@ -883,6 +971,21 @@ Allow: /
 Sitemap: ${origin}/sitemap.xml
 `;
       return new Response(body, { headers: secured({ "Content-Type": "text/plain; charset=utf-8" }) });
+    }
+
+    // llms.txt — índice simples para LLMs/crawlers de IA (Lighthouse "agentic browsing")
+    if (path === "/llms.txt") {
+      let links = "- [Início](" + origin + "/)";
+      try {
+        const posts = await fetchPosts(30);
+        for (const p of posts) {
+          links += `\n- [${p.title}](${origin}/post/${p.slug}/)`;
+        }
+      } catch (e) {
+        // lista parcial se API indisponível
+      }
+      const body = `# Blog Turismo IA\n\n> ${DEFAULT_DESC}\n\n## Artigos\n\n${links}\n`;
+      return new Response(body, { headers: secured({ "Content-Type": "text/markdown; charset=utf-8" }) });
     }
 
     // Sitemap.xml — gerado dinamicamente a partir dos posts publicados

@@ -29,7 +29,13 @@ function fakePost(now = new Date().toISOString()) {
   };
 }
 
-const posts = [fakePost()];
+const posts = [fakePost(), {
+  ...fakePost(),
+  id: 2,
+  slug: "segundo-rota",
+  title: "Segunda Rota",
+  cover_image: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Cidades_2.jpg/1280px-Cidades_2.jpg",
+}];
 
 let lastAdminAuth = null;
 globalThis.fetch = async (input, init) => {
@@ -82,6 +88,17 @@ async function run() {
   check("home grade de cards", home.includes('class="row g-4 post-grid"'));
   check("home secao recentes", home.includes('Artigos recentes'));
   check("home link favicon", home.includes('rel="icon"'));
+  check("home sem CDN", !home.includes("cdn.jsdelivr.net"));
+  check("home sem bootstrap JS", !home.includes("bootstrap.bundle"));
+  check("home hero fetchpriority", /fetchpriority="high"/.test(home));
+  check("home preload LCP", home.includes('<link rel="preload" as="image" fetchpriority="high"'));
+  check("home thumb 960", home.includes("/960px-Cidades_2.jpg"));
+  check("home cache-control", (homeRes.headers.get("Cache-Control") || "").includes("max-age=300"));
+
+  const llmsRes = await worker.fetch({ url: SITE + "/llms.txt" }, {}, {});
+  const llms = await llmsRes.text();
+  check("llms.txt 200", llmsRes.status === 200);
+  check("llms.txt artigos", llms.includes("## Artigos") && llms.includes("/post/roteiro-de-3-dias-em-gramado/"));
 
   const icoRes = await worker.fetch({ url: SITE + "/favicon.svg" }, {}, {});
   const ico = await icoRes.text();
@@ -114,6 +131,9 @@ async function run() {
   check("post toc ancora h2", post.includes('<h2 id="por-que-visitar">'));
   check("post toc link", post.includes('href="#por-que-visitar"') && post.includes('>Por que visitar</a>'));
   check("post progress bar", post.includes('class="progress"'));
+  check("post sem CDN", !post.includes("cdn.jsdelivr.net"));
+  check("post cover fetchpriority", /<img class="cover-img w-100 post-cover"[^>]*fetchpriority="high"/.test(post));
+  check("post preload", post.includes('<link rel="preload" as="image"'));
   check("post layout center stage", post.includes('class="row g-4 layout"'));
   check("post kit afiliado", post.includes('class="kit mt-5"'));
   check("post kit item da IA", post.includes("Jaqueta corta-vento"));
