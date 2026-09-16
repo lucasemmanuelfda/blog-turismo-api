@@ -29,12 +29,24 @@ const POST_CACHE = { "Cache-Control": "public, max-age=3600, s-maxage=3600" };
 // ---------- Utilitários ----------
 
 // Headers de segurança aplicados em todas as respostas.
-// O site não carrega JS de terceiros; o CSP só abre exceção para o beacon de analytics.
-// Cloudflare Web Analytics (sem cookies). Preencha o token do painel para ativar;
-// o CSP só libera o domínio da Cloudflare quando há token.
+// Scripts de terceiros entram por lista explícita: cada um abaixo abre só o
+// próprio domínio no CSP (script-src/connect-src), nada de 'unsafe-inline'.
+
+// Cloudflare Web Analytics (sem cookies). Preencha o token do painel para ativar.
 const CF_BEACON_TOKEN = "";
 
-const CSP = `default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests${CF_BEACON_TOKEN ? "; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com" : ""}`;
+// Travelpayouts Drive: monetiza links automaticamente. Cole a URL do seu painel;
+// vazio desliga o script.
+const DRIVE_SRC = "https://emrld.ltd/NTc0Nzcw.js?t=574770";
+
+const cspList = (extra) => ["'self'", ...extra.filter(Boolean)].join(" ");
+const CSP = `default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests; script-src ${cspList([
+  CF_BEACON_TOKEN && "https://static.cloudflareinsights.com",
+  DRIVE_SRC && "https://emrld.ltd",
+])}; connect-src ${cspList([
+  CF_BEACON_TOKEN && "https://cloudflareinsights.com",
+  DRIVE_SRC && "https://emrld.ltd",
+])}`;
 
 const SECURITY_HEADERS = {
   "Content-Security-Policy": CSP,
@@ -374,6 +386,7 @@ ul,ol{padding-left:1.5em;margin:0 0 1rem}
 code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em; border-radius:6px; font-size:.9em; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 </style>
+${!t.admin && DRIVE_SRC ? `<script async data-cmp-ab="2" src="${esc(DRIVE_SRC)}"></script>` : ""}
 ${!t.admin && CF_BEACON_TOKEN ? `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="${esc(JSON.stringify({ token: CF_BEACON_TOKEN }))}"></script>` : ""}
 </head>
 <body class="d-flex flex-column min-vh-100">
@@ -623,7 +636,8 @@ function privacidadePage(origin) {
   const body = `<h1>Política de Privacidade</h1>
 <p>Esta política explica como o Blog Turismo IA trata informações dos visitantes, em linha com a Lei Geral de Proteção de Dados (LGPD).</p>
 <h2>Cookies</h2>
-<p>Este site <strong>não usa cookies de rastreamento nem de publicidade</strong>. Visitantes não são identificados. O único cookie existente é de sessão do painel administrativo (restrito à equipe) e não se aplica ao público.</p>
+<p>Este site não usa cookies próprios de rastreamento nem de publicidade, e não identifica visitantes. O único cookie nosso é de sessão do painel administrativo (restrito à equipe).</p>
+<p>Para monetizar os links de parceiros (abaixo), carregamos um script da Travelpayouts que marca o link de afiliado. Ao clicar num link de parceiro, o site de destino pode gravar cookies próprios de atribuição, conforme as políticas dele.</p>
 <h2>Análises</h2>
 <p>Podemos usar estatísticas de acesso agregadas e sem cookies para entender quais conteúdos são úteis. Esses dados não identificam você individualmente.</p>
 <h2>Links de afiliado</h2>

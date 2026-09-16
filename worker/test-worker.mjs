@@ -102,9 +102,12 @@ async function run() {
   check("home thumb 960", home.includes("/960px-Cidades_2.jpg"));
   check("home cache-control", (homeRes.headers.get("Cache-Control") || "").includes("max-age=300"));
   check("home sem analytics (token vazio)", !home.includes("cloudflareinsights"));
+  check("home drive script", home.includes('src="https://emrld.ltd/NTc0Nzcw.js?t=574770"'));
   const homeCsp = homeRes.headers.get("Content-Security-Policy") || "";
   check("csp baseline", homeCsp.includes("default-src 'self'"));
   check("csp sem cloudflare (token vazio)", !homeCsp.includes("cloudflareinsights"));
+  check("csp permite drive", homeCsp.includes("script-src 'self' https://emrld.ltd"));
+  check("csp connect drive", homeCsp.includes("connect-src 'self' https://emrld.ltd"));
 
   const llmsRes = await worker.fetch({ url: SITE + "/llms.txt" }, {}, {});
   const llms = await llmsRes.text();
@@ -215,7 +218,7 @@ async function run() {
   const privRes = await worker.fetch({ url: SITE + "/privacidade" }, {}, {});
   const priv = await privRes.text();
   check("privacidade 200", privRes.status === 200);
-  check("privacidade sem cookies rastreamento", priv.includes("não usa cookies de rastreamento"));
+  check("privacidade sem cookies proprios rastreamento", priv.includes("cookies próprios de rastreamento"));
   check("privacidade LGPD", priv.includes("LGPD"));
   check("privacidade afiliado", priv.includes("afiliado"));
 
@@ -225,6 +228,7 @@ async function run() {
   check("admin login sem sessao", adminPage.includes('action="/admin/login"'));
   check("admin noindex", adminPage.includes('content="noindex, nofollow"'));
   check("admin login campo usuario", adminPage.includes('name="username"'));
+  check("admin sem drive", !adminPage.includes("emrld.ltd"));
 
   const loginRes = await worker.fetch(
     new Request(SITE + "/admin/login", {
