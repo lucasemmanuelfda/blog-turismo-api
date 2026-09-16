@@ -1,6 +1,6 @@
 // Harness de teste local do Worker (Node >= 24). Sem dependências.
 // Roda com: node worker/test-worker.mjs  (na raiz do repo)
-import worker from "./worker.js";
+import worker, { TRAVEL_AFFILIATES } from "./worker.js";
 
 const SITE = "https://exemplo.workers.dev";
 
@@ -38,12 +38,19 @@ const posts = [fakePost(), {
 }];
 
 let lastAdminAuth = null;
+let lastLoginBody = null;
 globalThis.fetch = async (input, init) => {
   const url = String(input);
   const opts = init || {};
   if (url.endsWith("/auth/login")) {
     lastAdminAuth = opts?.headers?.Authorization || null;
+    lastLoginBody = JSON.parse(opts.body || "{}");
     return jsonResponse({ token: "9999999999.abc", admin: true, expires_in: 86400 });
+  }
+  if (url.endsWith("/auth/change-password")) {
+    lastAdminAuth = opts?.headers?.Authorization || null;
+    const body = JSON.parse(opts.body || "{}");
+    return body.current_password === "atual" ? jsonResponse(null, 204) : jsonResponse({ detail: "Senha atual inválida" }, 401);
   }
   if (url.endsWith("/posts/1/publish")) {
     lastAdminAuth = opts?.headers?.Authorization || null;
@@ -94,11 +101,16 @@ async function run() {
   check("home preload LCP", home.includes('<link rel="preload" as="image" fetchpriority="high"'));
   check("home thumb 960", home.includes("/960px-Cidades_2.jpg"));
   check("home cache-control", (homeRes.headers.get("Cache-Control") || "").includes("max-age=300"));
+  check("home sem analytics (token vazio)", !home.includes("cloudflareinsights"));
+  const homeCsp = homeRes.headers.get("Content-Security-Policy") || "";
+  check("csp baseline", homeCsp.includes("default-src 'self'"));
+  check("csp sem cloudflare (token vazio)", !homeCsp.includes("cloudflareinsights"));
 
   const llmsRes = await worker.fetch({ url: SITE + "/llms.txt" }, {}, {});
   const llms = await llmsRes.text();
   check("llms.txt 200", llmsRes.status === 200);
   check("llms.txt artigos", llms.includes("## Artigos") && llms.includes("/post/roteiro-de-3-dias-em-gramado/"));
+  check("llms.txt institucional", llms.includes("/sobre") && llms.includes("/privacidade"));
 
   const icoRes = await worker.fetch({ url: SITE + "/favicon.svg" }, {}, {});
   const ico = await icoRes.text();
@@ -142,6 +154,19 @@ async function run() {
   check("post kit tag amazon", post.includes("tag=blogturismo20-20"));
   check("post kit disclosure", post.includes("afiliado da Amazon"));
   check("post kit cta", post.includes("Ver na Amazon"));
+  check("post kit sponsored", post.includes('rel="sponsored nofollow noopener"'));
+  check("post sem bloco viagem (ids vazios)", !post.includes("Planeje a viagem"));
+
+  // bloco de afiliados de viagem com IDs injetados
+  TRAVEL_AFFILIATES.travelpayouts = "123456";
+  TRAVEL_AFFILIATES.booking = "7890";
+  const postAff = await (await worker.fetch({ url: SITE + "/post/roteiro-de-3-dias-em-gramado/" }, {}, {})).text();
+  TRAVEL_AFFILIATES.travelpayouts = "";
+  TRAVEL_AFFILIATES.booking = "";
+  check("viagem aviasales marker", postAff.includes("aviasales.com/?marker=123456"));
+  check("viagem aviasales subid", postAff.includes("subid=roteiro-de-3-dias-em-gramado"));
+  check("viagem booking aid", postAff.includes("booking.com/searchresults.html?aid=7890"));
+  check("viagem sponsored", postAff.includes('rel="sponsored nofollow noopener"'));
 
   const tagRes = await worker.fetch({ url: SITE + "/tag/gramado/" }, {}, {});
   const tag = await tagRes.text();
@@ -177,12 +202,29 @@ async function run() {
   check("sitemap post loc", sm.includes(`<loc>${SITE}/post/roteiro-de-3-dias-em-gramado/</loc>`));
   check("sitemap lastmod YYYY-MM-DD", /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/.test(sm));
   check("sitemap lastmod sem horario", !/T\d{2}/.test(sm));
+  check("sitemap sobre", sm.includes("<loc>" + SITE + "/sobre</loc>"));
+  check("sitemap privacidade", sm.includes("<loc>" + SITE + "/privacidade</loc>"));
+
+  // Páginas institucionais
+  const sobreRes = await worker.fetch({ url: SITE + "/sobre" }, {}, {});
+  const sobre = await sobreRes.text();
+  check("sobre 200", sobreRes.status === 200);
+  check("sobre autor", sobre.includes("Lucas"));
+  check("sobre canonical", sobre.includes('rel="canonical" href="' + SITE + "/sobre\""));
+
+  const privRes = await worker.fetch({ url: SITE + "/privacidade" }, {}, {});
+  const priv = await privRes.text();
+  check("privacidade 200", privRes.status === 200);
+  check("privacidade sem cookies rastreamento", priv.includes("não usa cookies de rastreamento"));
+  check("privacidade LGPD", priv.includes("LGPD"));
+  check("privacidade afiliado", priv.includes("afiliado"));
 
   // Painel admin
   const adminNoCookie = await worker.fetch(new Request(SITE + "/admin"), {}, {});
   const adminPage = await adminNoCookie.text();
   check("admin login sem sessao", adminPage.includes('action="/admin/login"'));
   check("admin noindex", adminPage.includes('content="noindex, nofollow"'));
+  check("admin login campo usuario", adminPage.includes('name="username"'));
 
   const loginRes = await worker.fetch(
     new Request(SITE + "/admin/login", {
@@ -194,6 +236,7 @@ async function run() {
     {}
   );
   check("admin login 302", loginRes.status === 302);
+  check("admin login envia usuario", lastLoginBody && lastLoginBody.username === "admin");
   const setCookie = loginRes.headers.get("Set-Cookie") || "";
   check("admin cookie sessao", setCookie.includes("admin_token=") && setCookie.includes("HttpOnly"));
 
@@ -206,6 +249,7 @@ async function run() {
   check("admin dashboard gerar", dash.includes("Gerar artigo"));
   check("admin dashboard status", dash.includes("Rascunhos") && dash.includes("Agendados") && dash.includes("Publicados"));
   check("admin mostra post", dash.includes("Roteiro de 3 Dias em Gramado"));
+  check("admin dashboard trocar senha", dash.includes("Trocar senha") && dash.includes('action="/admin/senha"'));
 
   const pubRes = await worker.fetch(
     new Request(SITE + "/admin/publish", {
@@ -218,6 +262,30 @@ async function run() {
   );
   check("admin publicar 302", pubRes.status === 302);
   check("admin publicar usa token", lastAdminAuth === "Bearer 9999999999.abc");
+
+  const senhaRes = await worker.fetch(
+    new Request(SITE + "/admin/senha", {
+      method: "POST",
+      headers: { Cookie: "admin_token=9999999999.abc", "content-type": "application/x-www-form-urlencoded" },
+      body: "current_password=atual&new_password=novasenha&confirm_password=novasenha",
+    }),
+    {},
+    {}
+  );
+  check("admin trocar senha 302", senhaRes.status === 302);
+  check("admin trocar senha usa token", lastAdminAuth === "Bearer 9999999999.abc");
+  check("admin trocar senha mensagem", (senhaRes.headers.get("Location") || "").includes("msg="));
+
+  const senhaErroRes = await worker.fetch(
+    new Request(SITE + "/admin/senha", {
+      method: "POST",
+      headers: { Cookie: "admin_token=9999999999.abc", "content-type": "application/x-www-form-urlencoded" },
+      body: "current_password=atual&new_password=novasenha&confirm_password=diferente",
+    }),
+    {},
+    {}
+  );
+  check("admin trocar senha confere confirmacao", (senhaErroRes.headers.get("Location") || "").includes("erro="));
 
   const logoutRes = await worker.fetch(new Request(SITE + "/admin/logout", { method: "POST" }), {}, {});
   check("admin logout 302", logoutRes.status === 302);

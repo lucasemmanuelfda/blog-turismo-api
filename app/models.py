@@ -7,6 +7,15 @@ from app.database import Base
 from app.timeutil import utcnow
 
 
+class AppSetting(Base):
+    """Configurações persistidas em runtime (ex.: hash da senha do admin)."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")
+
+
 class Category(Base):
     __tablename__ = "categories"
 

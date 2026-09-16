@@ -29,10 +29,15 @@ const POST_CACHE = { "Cache-Control": "public, max-age=3600, s-maxage=3600" };
 // ---------- Utilitários ----------
 
 // Headers de segurança aplicados em todas as respostas.
-// O site lê o conteúdo sem JS (só o Bootstrap usa script, vindo do CDN).
+// O site não carrega JS de terceiros; o CSP só abre exceção para o beacon de analytics.
+// Cloudflare Web Analytics (sem cookies). Preencha o token do painel para ativar;
+// o CSP só libera o domínio da Cloudflare quando há token.
+const CF_BEACON_TOKEN = "";
+
+const CSP = `default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests${CF_BEACON_TOKEN ? "; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com" : ""}`;
+
 const SECURITY_HEADERS = {
-  "Content-Security-Policy":
-    "default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests",
+  "Content-Security-Policy": CSP,
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -369,6 +374,7 @@ ul,ol{padding-left:1.5em;margin:0 0 1rem}
 code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em; border-radius:6px; font-size:.9em; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 </style>
+${!t.admin && CF_BEACON_TOKEN ? `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="${esc(JSON.stringify({ token: CF_BEACON_TOKEN }))}"></script>` : ""}
 </head>
 <body class="d-flex flex-column min-vh-100">
 <a class="visually-hidden-focusable" href="#principal">Pular para o conteúdo principal</a>
@@ -378,7 +384,7 @@ ${nav}
 ${t.body}
 </main>
 <footer class="footer text-center text-body-secondary small py-4 px-3">
-  <a class="link-body-emphasis" href="/">Blog Turismo IA</a> · Conteúdo informativo gerado automaticamente todos os dias · <a class="link-secondary" href="${ADMIN_ROOT}">Painel</a>
+  <a class="link-body-emphasis" href="/">Blog Turismo IA</a> · <a class="link-secondary" href="/sobre">Sobre</a> · <a class="link-secondary" href="/privacidade">Privacidade</a> · Conteúdo informativo gerado automaticamente todos os dias · <a class="link-secondary" href="${ADMIN_ROOT}">Painel</a>
 </footer>
 </body>
 </html>`;
@@ -576,6 +582,58 @@ ${hero}
 
 const AMAZON_TAG = "blogturismo20-20";
 
+// Afiliados de viagem. Deixe vazio para ocultar o bloco. Exportado para os testes
+// injetarem IDs temporários (em produção, preencha aqui e faça o deploy).
+export const TRAVEL_AFFILIATES = { travelpayouts: "", booking: "" };
+
+// E-mail público de contato (LGPD / dúvidas). Preencha para exibir o link.
+const CONTACT_EMAIL = "";
+
+function contactLine() {
+  return CONTACT_EMAIL
+    ? `Para falar com a gente, escreva para <a href="mailto:${esc(CONTACT_EMAIL)}">${esc(CONTACT_EMAIL)}</a>.`
+    : "O canal de contato será publicado em breve nesta página.";
+}
+
+function legalPage(origin, path, title, desc, body) {
+  return new Response(
+    page({
+      type: "website",
+      title,
+      desc,
+      canonical: origin + path,
+      origin,
+      body,
+    }),
+    { headers: secured({ "Content-Type": "text/html; charset=utf-8", ...POST_CACHE }) }
+  );
+}
+
+function sobrePage(origin) {
+  const body = `<h1>Sobre o Blog Turismo IA</h1>
+<p>O <strong>Blog Turismo IA</strong> publica todos os dias roteiros, dicas e guias de destinos para quem gosta de viajar — com foco em lugares do Brasil e do mundo que valem a viagem.</p>
+<p>Os textos são produzidos com apoio de inteligência artificial e organizados por <strong>Lucas</strong>, que mantém o projeto, cuida dos temas e revisa o que vai ao ar. Nosso objetivo é informar de forma direta e útil, sem enrolação.</p>
+<p>Quando indicamos produtos ou serviços, deixamos claro: alguns links são de afiliado e podem gerar uma pequena comissão para o blog, sem custo extra para você.</p>
+<h2>Como o conteúdo é organizado</h2>
+<p>Cada artigo traz um roteiro ou destino com dicas práticas de quando ir, o que fazer e o que levar. A frequência de publicação é diária.</p>`;
+  return legalPage(origin, "/sobre", `Sobre — ${DEFAULT_TITLE}`, "Quem faz o Blog Turismo IA e como o conteúdo é produzido.", body);
+}
+
+function privacidadePage(origin) {
+  const body = `<h1>Política de Privacidade</h1>
+<p>Esta política explica como o Blog Turismo IA trata informações dos visitantes, em linha com a Lei Geral de Proteção de Dados (LGPD).</p>
+<h2>Cookies</h2>
+<p>Este site <strong>não usa cookies de rastreamento nem de publicidade</strong>. Visitantes não são identificados. O único cookie existente é de sessão do painel administrativo (restrito à equipe) e não se aplica ao público.</p>
+<h2>Análises</h2>
+<p>Podemos usar estatísticas de acesso agregadas e sem cookies para entender quais conteúdos são úteis. Esses dados não identificam você individualmente.</p>
+<h2>Links de afiliado</h2>
+<p>Alguns links levam a lojas e serviços parceiros (como Amazon, Booking.com e Aviasales). Ao comprar ou reservar por eles, o blog pode receber uma comissão <strong>sem nenhum custo adicional para você</strong>. O preço e as condições são os mesmos.</p>
+<h2>Seus direitos (LGPD)</h2>
+<p>Como não coletamos dados pessoais de visitantes, normalmente não há dados a excluir. Ainda assim, você pode solicitar informações. ${contactLine()}</p>
+<p>Última atualização: ${new Date().toISOString().slice(0, 10)}.</p>`;
+  return legalPage(origin, "/privacidade", `Privacidade — ${DEFAULT_TITLE}`, "Como o Blog Turismo IA trata cookies, análises e links de afiliado.", body);
+}
+
 const KIT_ITEMS = [
   ["Sapatilha aquática de neoprene", "ideal para flutuação e trilhas com água", "sapato aquático neoprene"],
   ["Mochila de trilha", "leve e resistente para os passeios do dia", "mochila de trilha leve"],
@@ -598,9 +656,9 @@ function kitHtml(post) {
       <div class="card h-100 border-0 shadow-sm">
         <div class="card-body">
           <span class="badge rounded-pill text-bg-primary mb-2" aria-hidden="true">${i + 1}</span>
-          <h3 class="h6 mb-2"><a class="text-decoration-none link-body-emphasis" rel="nofollow noopener" href="${url}">${esc(item.name)}</a></h3>
+          <h3 class="h6 mb-2"><a class="text-decoration-none link-body-emphasis" rel="sponsored nofollow noopener" href="${url}">${esc(item.name)}</a></h3>
           ${item.note ? `<p class="small text-body-secondary mb-3">${esc(item.note)}</p>` : ""}
-          <a class="btn btn-sm btn-outline-primary" rel="nofollow noopener" href="${url}">Ver na Amazon</a>
+          <a class="btn btn-sm btn-outline-primary" rel="sponsored nofollow noopener" href="${url}">Ver na Amazon</a>
         </div>
       </div>
     </div>`;
@@ -610,6 +668,27 @@ function kitHtml(post) {
   <h2 class="h4 mb-1">Kit recomendado para essa viagem</h2>
   <p class="text-body-secondary small mb-3">Alguns links desta página são de afiliado da Amazon. Se você comprar por eles, o blog ganha uma pequena comissão sem custo extra para você.</p>
   <div class="row g-3">${items}</div>
+</section>`;
+}
+
+function travelHtml(post) {
+  const marker = TRAVEL_AFFILIATES.travelpayouts;
+  const booking = TRAVEL_AFFILIATES.booking;
+  if (!marker && !booking) return "";
+  const dest = ((post.tags || [])[0] || post.title || "").trim();
+  const q = encodeURIComponent(dest);
+  const sub = encodeURIComponent(post.slug || "");
+  const links = [];
+  if (marker) {
+    links.push(`<a class="btn btn-outline-primary" rel="sponsored nofollow noopener" href="https://www.aviasales.com/?marker=${encodeURIComponent(marker)}&subid=${sub}">Buscar voos para ${esc(dest)}</a>`);
+  }
+  if (booking) {
+    links.push(`<a class="btn btn-outline-primary" rel="sponsored nofollow noopener" href="https://www.booking.com/searchresults.html?aid=${encodeURIComponent(booking)}&ss=${q}">Ver hotéis em ${esc(dest)}</a>`);
+  }
+  return `<section class="kit mt-5" aria-label="Planeje a viagem">
+  <h2 class="h4 mb-1">Planeje a viagem</h2>
+  <p class="text-body-secondary small mb-3">Links de parceiros. Reservando por eles, o blog ganha uma pequena comissão sem custo extra para você.</p>
+  <div class="d-flex flex-wrap gap-2">${links.join("")}</div>
 </section>`;
 }
 
@@ -656,6 +735,7 @@ async function postPage(request, origin, slug) {
         ${tocHtml ? `<div class="col-lg-9 content">${content}</div>${tocHtml}` : `<div class="col-lg-12 content">${content}</div>`}
       </div>
       ${kitHtml(post)}
+      ${travelHtml(post)}
     </div>
   </div>
 </article>`;
@@ -721,8 +801,12 @@ ${erro ? `<div class="alert alert-danger" role="alert">${esc(erro)}</div>` : ""}
 <div class="card border-0 shadow-sm">
   <div class="card-body p-4 p-md-5">
     <h1 class="h4 mb-1">Painel do blog</h1>
-    <p class="text-body-secondary small mb-4">Entre com a senha de administrador (ADMIN_KEY).</p>
+    <p class="text-body-secondary small mb-4">Entre com seu usuário e senha.</p>
     <form method="post" action="${ADMIN_ROOT}/login">
+      <div class="mb-3">
+        <label class="form-label" for="admin-username">Usuário</label>
+        <input class="form-control" type="text" id="admin-username" name="username" value="admin" autocomplete="username" required>
+      </div>
       <div class="mb-3">
         <label class="form-label" for="admin-password">Senha</label>
         <input class="form-control" type="password" id="admin-password" name="password" autocomplete="current-password" required>
@@ -806,6 +890,19 @@ async function adminDashboard(request, url) {
   <span class="text-body-secondary small">Sessão ativa</span>
 </div>
 ${flash}
+<details class="card border-0 shadow-sm mb-4">
+  <summary class="card-body fw-semibold" style="cursor:pointer">Trocar senha</summary>
+  <form method="post" action="${ADMIN_ROOT}/senha">
+    <div class="card-body pt-0">
+      <div class="row g-2">
+        <div class="col-md-4"><input class="form-control" type="password" name="current_password" placeholder="Senha atual" autocomplete="current-password" required></div>
+        <div class="col-md-4"><input class="form-control" type="password" name="new_password" placeholder="Nova senha" autocomplete="new-password" minlength="4" required></div>
+        <div class="col-md-4"><input class="form-control" type="password" name="confirm_password" placeholder="Confirmar nova senha" autocomplete="new-password" minlength="4" required></div>
+      </div>
+      <button class="btn btn-outline-primary mt-2" type="submit">Salvar nova senha</button>
+    </div>
+  </form>
+</details>
 <form class="card border-0 shadow-sm mb-4" method="post" action="${ADMIN_ROOT}/generate">
   <div class="card-body">
     <h2 class="h5 mb-3">Gerar artigo</h2>
@@ -835,12 +932,13 @@ ${statusSection("Rascunhos", "text-bg-secondary", drafts)}`;
 
 async function adminLoginAction(request) {
   const fd = await request.formData();
+  const username = String(fd.get("username") || "admin").trim();
   const password = String(fd.get("password") || "");
   let data;
   try {
-    const res = await apiCall("/auth/login", { method: "POST", body: { password } });
+    const res = await apiCall("/auth/login", { method: "POST", body: { username, password } });
     if (!res.ok) {
-      return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent(res.status === 401 ? "Senha incorreta" : "Falha ao entrar (" + res.status + ")"));
+      return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent(res.status === 401 ? "Usuário ou senha incorretos" : "Falha ao entrar (" + res.status + ")"));
     }
     data = await res.json();
   } catch {
@@ -850,6 +948,37 @@ async function adminLoginAction(request) {
     ADMIN_ROOT,
     adminSessionCookie(data.token, data.expires_in || 86400)
   );
+}
+
+async function adminChangePasswordAction(request) {
+  const token = readCookie(request, ADMIN_COOKIE);
+  if (!token) return adminRedirect(ADMIN_ROOT);
+  const fd = await request.formData();
+  const current = String(fd.get("current_password") || "");
+  const next = String(fd.get("new_password") || "");
+  const confirm = String(fd.get("confirm_password") || "");
+  if (next.length < 4) {
+    return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("Nova senha muito curta (mínimo 4)"));
+  }
+  if (next !== confirm) {
+    return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("As senhas não conferem"));
+  }
+  try {
+    const res = await apiCall("/auth/change-password", {
+      method: "POST",
+      token,
+      body: { current_password: current, new_password: next },
+    });
+    if (res.status === 401) {
+      return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("Senha atual inválida"));
+    }
+    if (!res.ok) {
+      return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("Falha ao trocar a senha (" + res.status + ")"));
+    }
+    return adminRedirect(ADMIN_ROOT + "?msg=" + encodeURIComponent("Senha alterada com sucesso"));
+  } catch {
+    return adminRedirect(ADMIN_ROOT + "?erro=" + encodeURIComponent("API indisponível"));
+  }
 }
 
 function adminLogoutAction() {
@@ -935,6 +1064,7 @@ export default {
       if (method === "POST") {
         if (path === ADMIN_ROOT + "/login") return adminLoginAction(request);
         if (path === ADMIN_ROOT + "/logout") return adminLogoutAction();
+        if (path === ADMIN_ROOT + "/senha") return adminChangePasswordAction(request);
         if (path === ADMIN_ROOT + "/generate") return adminGenerateAction(request);
         const action = path.slice((ADMIN_ROOT + "/").length);
         if (["publish", "delete", "refresh-images", "kit"].includes(action)) {
@@ -974,6 +1104,10 @@ Sitemap: ${origin}/sitemap.xml
       return new Response(body, { headers: secured({ "Content-Type": "text/plain; charset=utf-8" }) });
     }
 
+    // Páginas institucionais
+    if (path === "/sobre" || path === "/sobre/") return sobrePage(origin);
+    if (path === "/privacidade" || path === "/privacidade/") return privacidadePage(origin);
+
     // llms.txt — índice simples para LLMs/crawlers de IA (Lighthouse "agentic browsing")
     if (path === "/llms.txt") {
       let links = "- [Início](" + origin + "/)";
@@ -985,7 +1119,7 @@ Sitemap: ${origin}/sitemap.xml
       } catch (e) {
         // lista parcial se API indisponível
       }
-      const body = `# Blog Turismo IA\n\n> ${DEFAULT_DESC}\n\n## Artigos\n\n${links}\n`;
+      const body = `# Blog Turismo IA\n\n> ${DEFAULT_DESC}\n\n## Sobre\n\n- [Sobre](${origin}/sobre)\n- [Privacidade](${origin}/privacidade)\n\n## Artigos\n\n${links}\n`;
       return new Response(body, { headers: secured({ "Content-Type": "text/markdown; charset=utf-8" }) });
     }
 
@@ -1003,6 +1137,8 @@ Sitemap: ${origin}/sitemap.xml
       const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>${origin}/</loc><changefreq>daily</changefreq></url>
+  <url><loc>${origin}/sobre</loc><changefreq>monthly</changefreq></url>
+  <url><loc>${origin}/privacidade</loc><changefreq>monthly</changefreq></url>
 ${links}
 </urlset>`;
       return new Response(body, { headers: secured({ "Content-Type": "application/xml; charset=utf-8" }) });

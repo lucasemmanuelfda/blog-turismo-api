@@ -607,3 +607,107 @@ def test_admin_login_rejects_broken_hash():
         assert r.status_code == 401
     finally:
         settings.admin_key, settings.admin_password_hash = saved
+
+
+def test_admin_login_rejects_wrong_username():
+    from app.config import get_settings
+
+    r = client.post(
+        "/auth/login",
+        json={"username": "outro", "password": get_settings().admin_key},
+    )
+    assert r.status_code == 401
+
+
+def test_admin_login_rejects_non_ascii_username():
+    from app.config import get_settings
+
+    r = client.post(
+        "/auth/login",
+        json={"username": "usuário", "password": get_settings().admin_key},
+    )
+    assert r.status_code == 401
+
+
+def _clear_stored_password():
+    from app.database import SessionLocal
+    from app.models import AppSetting
+    from app.routers.auth import ADMIN_PASSWORD_KEY
+
+    db = SessionLocal()
+    try:
+        row = db.get(AppSetting, ADMIN_PASSWORD_KEY)
+        if row:
+            db.delete(row)
+            db.commit()
+    finally:
+        db.close()
+
+
+def test_seed_admin_password_creates_default():
+    import bcrypt
+
+    from app.database import SessionLocal
+    from app.models import AppSetting
+    from app.routers.auth import (
+        ADMIN_PASSWORD_KEY,
+        DEFAULT_ADMIN_PASSWORD,
+        seed_admin_password,
+    )
+
+    _clear_stored_password()
+    seed_admin_password()
+    db = SessionLocal()
+    try:
+        row = db.get(AppSetting, ADMIN_PASSWORD_KEY)
+        assert row is not None
+        assert bcrypt.checkpw(DEFAULT_ADMIN_PASSWORD.encode(), row.value.encode())
+    finally:
+        db.close()
+        _clear_stored_password()
+
+
+def test_change_password_and_login_with_new_password():
+    from app.database import SessionLocal
+    from app.models import AppSetting
+    from app.routers.auth import ADMIN_PASSWORD_KEY
+
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "teste123", "new_password": "nova-senha-123"},
+        headers={"Authorization": "Bearer teste123"},
+    )
+    assert r.status_code == 204, r.text
+    try:
+        r = client.post(
+            "/auth/login", json={"username": "admin", "password": "nova-senha-123"}
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["token"]
+
+        r = client.post(
+            "/auth/login", json={"username": "admin", "password": "teste123"}
+        )
+        assert r.status_code == 401
+    finally:
+        db = SessionLocal()
+        row = db.get(AppSetting, ADMIN_PASSWORD_KEY)
+        if row:
+            db.delete(row)
+            db.commit()
+        db.close()
+
+
+def test_change_password_requires_current_and_auth():
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "errada", "new_password": "x12345"},
+        headers={"Authorization": "Bearer teste123"},
+    )
+    assert r.status_code == 401
+
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "teste123", "new_password": "x12345"},
+    )
+    assert r.status_code == 401

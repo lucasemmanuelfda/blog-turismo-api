@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
     global _scheduler
     Base.metadata.create_all(bind=engine)
     migrate()
+    auth.seed_admin_password()
     if settings.environment == "production":
         _scheduler = scheduler_module.start()
     yield
