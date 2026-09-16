@@ -1022,4 +1022,14 @@ ${links}
     // Home (default)
     return home(request, origin);
   },
+
+  async scheduled(event, env, ctx) {
+    // Mantém a API do Render free acordada (dorme ~15min de inatividade).
+    // cron: */10 * * * *
+    try {
+      await fetch("https://blog-turismo-api.onrender.com/health", { cf: { cacheTtl: 0 } });
+    } catch (e) {
+      // falha isolada: o próximo run de 10min reverifica sozinho
+    }
+  },
 };
