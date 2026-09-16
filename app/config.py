@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     ai_fallback_model: str = ""
 
     publish_interval_minutes: int = 10
-    max_posts_per_day: int = 5
+    max_posts_per_day: int = 2
 
     # Segundo cérebro: arquivo que acumula fatos de cada destino/tema
     memory_file: str = "blog-memory.json"
