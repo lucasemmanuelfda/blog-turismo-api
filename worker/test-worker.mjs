@@ -134,6 +134,7 @@ async function run() {
   check("post sem CDN", !post.includes("cdn.jsdelivr.net"));
   check("post cover fetchpriority", /<img class="cover-img w-100 post-cover"[^>]*fetchpriority="high"/.test(post));
   check("post preload", post.includes('<link rel="preload" as="image"'));
+  check("post cache-control 1h", (postRes.headers.get("Cache-Control") || "").includes("max-age=3600"));
   check("post layout center stage", post.includes('class="row g-4 layout"'));
   check("post kit afiliado", post.includes('class="kit mt-5"'));
   check("post kit item da IA", post.includes("Jaqueta corta-vento"));

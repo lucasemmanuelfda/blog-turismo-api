@@ -5,12 +5,18 @@ on:
     # 03h UTC = meia-noite no horario de Brasilia
     - cron: "0 3 * * *"
   workflow_dispatch:
+    inputs:
+      content:
+        description: "Gerar e publicar conteudo (deploy so do worker nao gera posts)"
+        type: boolean
+        default: true
 
 jobs:
   atualizar:
     runs-on: ubuntu-latest
     steps:
       - name: Gerar artigos do dia
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.content }}
         run: |
           curl -sS -X POST "${{ vars.API_URL }}/generate/daily?publish=true" \
             -H "Authorization: Bearer ${{ secrets.ADMIN_KEY }}" \
@@ -18,6 +24,7 @@ jobs:
             -w "\nHTTP %{http_code}\n"
 
       - name: Publicar todos os posts agendados
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.content }}
         run: |
           # Render free dorme em inatividade e derruba a 1a conexao (curl 56) no cold start.
           retry_curl() { curl -sS --retry 6 --retry-delay 15 --retry-all-errors "$@"; }

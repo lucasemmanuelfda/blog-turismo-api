@@ -24,6 +24,7 @@ const DEFAULT_DESC =
 // Páginas públicas podem ser cacheadas por 5 min (Cloudflare + navegador).
 // Conteúdo muda 1x/dia; cache curto reduz o custo de repetição sem estagnar.
 const PUB_CACHE = { "Cache-Control": "public, max-age=300, s-maxage=300" };
+const POST_CACHE = { "Cache-Control": "public, max-age=3600, s-maxage=3600" };
 
 // ---------- Utilitários ----------
 
@@ -671,7 +672,7 @@ async function postPage(request, origin, slug) {
       body,
       jsonld: postJsonLd(post),
     }),
-    { headers: secured({ "Content-Type": "text/html; charset=utf-8", ...PUB_CACHE }) }
+    { headers: secured({ "Content-Type": "text/html; charset=utf-8", ...POST_CACHE }) }
   );
 }
 
