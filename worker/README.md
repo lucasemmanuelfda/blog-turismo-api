@@ -1,9 +1,8 @@
-# Worker Cloudflare — Site do Blog Turismo IA (SSR)
+# Worker Cloudflare — Site do Blog Turismo (SSR)
 
-Este worker serve o blog com **HTML índice-ável** (Google, Bing, e agentes de IA:
-ChatGPT, Perplexity, Claude etc.). O layout usa **Bootstrap 5** (CDN) e todo o
-conteúdo é renderizado no servidor; JavaScript no cliente só habilita a navbar
-responsiva, sem afetar a leitura.
+Este worker serve o blog com **HTML índice-ável** (Google, Bing e agentes como
+ChatGPT, Perplexity, Claude etc.). O layout usa **CSS próprio inline** (sem CDN) e
+todo o conteúdo é renderizado no servidor, sem depender de JavaScript no cliente.
 
 O que ele faz:
 
@@ -91,7 +90,7 @@ caso prefira.
 
 1. No GSC → **Sitemaps**, envie `https://<seu-domínio>/sitemap.xml`.
 2. Peça o recrawl de `https://<seu-domínio>/robots.txt`.
-3. Para aceitar IA: se usar **Cloudflare AI Gateway** ou bloquear bots de IA, libere
+3. Para aceitar agentes/crawlers: se usar **Cloudflare AI Gateway** ou bloqueio de bots, libere
    `GPTBot`, `ClaudeBot`, `PerplexityBot`, `Google-Extended` (o `User-agent: *` já permite todos).
 
 > Note: as imagens do Wikimedia Commons incluem `utm_source=commons.wikimedia.org`;

@@ -31,8 +31,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Blog Turismo IA",
-    description="Backend de blog de turismo com geração de conteúdo por IA.",
+    title="Blog Turismo",
+    description="Backend do blog de turismo com geração automática de conteúdo.",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -54,7 +54,7 @@ app.include_router(auth.router)
 @app.get("/")
 def root():
     return {
-        "app": "Blog Turismo IA",
+        "app": "Blog Turismo",
         "docs": "/docs",
         "health": "/health",
         "environment": settings.environment,

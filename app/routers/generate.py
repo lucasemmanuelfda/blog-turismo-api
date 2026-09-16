@@ -76,7 +76,7 @@ def generate_post(
     if not ai_service.available:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Geração de conteúdo por IA não configurada. Defina AI_API_KEY e AI_MODEL no ambiente.",
+            detail="Geração de conteúdo não configurada. Defina AI_API_KEY e AI_MODEL no ambiente.",
         )
     if provider == "fallback" and not ai_service.fallback_available:
         raise HTTPException(
@@ -138,12 +138,12 @@ def generate_daily(
     """Gera artigos diários para temas ainda não cobertos e agenda a publicação.
 
     Temas: preferencialmente a fila DAILY_TOPICS; senão, Google Trends do dia
-    transformado pela IA em tópicos evergreen (atemporais).
+    transformado em tópicos evergreen (atemporais).
     """
     if not ai_service.available:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Geração de conteúdo por IA não configurada.",
+            detail="Geração de conteúdo não configurada.",
         )
 
     settings = get_settings()

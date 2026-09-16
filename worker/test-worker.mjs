@@ -94,6 +94,8 @@ async function run() {
   check("home hero destaque", home.includes('class="card hero'));
   check("home grade de cards", home.includes('class="row g-4 post-grid"'));
   check("home secao recentes", home.includes('Artigos recentes'));
+  check("home marca sem IA", home.includes('>Blog Turismo</a>') && !home.includes("Blog Turismo IA"));
+  check("home desc sem IA", !home.includes("gerados por IA") && !/intelig[êe]ncia artificial/.test(home));
   check("home link favicon", home.includes('rel="icon"'));
   check("home sem CDN", !home.includes("cdn.jsdelivr.net"));
   check("home sem bootstrap JS", !home.includes("bootstrap.bundle"));
@@ -152,7 +154,7 @@ async function run() {
   check("post cache-control 1h", (postRes.headers.get("Cache-Control") || "").includes("max-age=3600"));
   check("post layout center stage", post.includes('class="row g-4 layout"'));
   check("post kit afiliado", post.includes('class="kit mt-5"'));
-  check("post kit item da IA", post.includes("Jaqueta corta-vento"));
+  check("post kit item sugerido", post.includes("Jaqueta corta-vento"));
   check("post kit item note", post.includes("encarar o vento da serra"));
   check("post kit tag amazon", post.includes("tag=blogturismo20-20"));
   check("post kit disclosure", post.includes("afiliado da Amazon"));
@@ -213,6 +215,7 @@ async function run() {
   const sobre = await sobreRes.text();
   check("sobre 200", sobreRes.status === 200);
   check("sobre autor", sobre.includes("Lucas"));
+  check("sobre sem IA", !/intelig[êe]ncia artificial|\bIA\b/.test(sobre));
   check("sobre canonical", sobre.includes('rel="canonical" href="' + SITE + "/sobre\""));
 
   const privRes = await worker.fetch({ url: SITE + "/privacidade" }, {}, {});

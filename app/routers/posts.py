@@ -125,7 +125,7 @@ def regenerate_kit(
     db: Session = Depends(get_db),
     _: None = Depends(require_admin),
 ):
-    """Gera um kit personalizado para um post existente via IA (sem reescrever o conteúdo)."""
+    """Gera um kit personalizado para um post existente (sem reescrever o conteúdo)."""
     post = db.get(models.Post, post_id)
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post não encontrado")

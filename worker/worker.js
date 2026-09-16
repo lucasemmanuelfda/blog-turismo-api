@@ -1,8 +1,9 @@
 /**
- * Cloudflare Worker — Site do Blog Turismo IA (Server-Side Rendering)
+ * Cloudflare Worker — Site do Blog Turismo (Server-Side Rendering)
  *
- * Serve o blog com HTML indexável por crawlers (Google) e por IA (ChatGPT / Facebook / etc.
- * via Open Graph + JSON-LD), sem depender de JavaScript para ler o conteúdo.
+ * Serve o blog com HTML indexável por crawlers (Google, Bing) e por agentes
+ * (ChatGPT / Facebook / etc. via Open Graph + JSON-LD), sem depender de
+ * JavaScript para ler o conteúdo.
  * Layout (CSS próprio inline, sem CDN): navbar, cards, dark mode por preferência do sistema.
  *
  * Painel admin em /admin: login com a senha ADMIN_KEY (trocada por token curto na API),
@@ -17,9 +18,9 @@ const API_BASE_URL = "https://blog-turismo-api.onrender.com";
 const ADMIN_COOKIE = "admin_token";
 const ADMIN_ROOT = "/admin";
 
-const DEFAULT_TITLE = "Blog Turismo IA";
+const DEFAULT_TITLE = "Blog Turismo";
 const DEFAULT_DESC =
-  "Destinos, roteiros e dicas de viagem atualizados todos os dias, gerados por IA.";
+  "Destinos, roteiros e dicas de viagem atualizados todos os dias.";
 
 // Páginas públicas podem ser cacheadas por 5 min (Cloudflare + navegador).
 // Conteúdo muda 1x/dia; cache curto reduz o custo de repetição sem estagnar.
@@ -202,7 +203,7 @@ function mdToHtml(md, toc) {
 function publicNav() {
   return `<nav class="navbar navbar-dark blognav sticky-top py-3" aria-label="Navegação principal">
   <div class="container d-flex flex-wrap align-items-center justify-content-between gap-2">
-    <a class="navbar-brand fw-bold" href="/">Blog Turismo IA</a>
+    <a class="navbar-brand fw-bold" href="/">Blog Turismo</a>
     <span class="navbar-text small opacity-75">Destinos, roteiros e dicas de viagem.</span>
   </div>
 </nav>`;
@@ -211,7 +212,7 @@ function publicNav() {
 function adminNav() {
   return `<nav class="navbar navbar-dark blognav sticky-top py-3" aria-label="Navegação do painel">
   <div class="container d-flex flex-wrap align-items-center justify-content-between gap-2">
-    <a class="navbar-brand fw-bold" href="${ADMIN_ROOT}">Blog Turismo IA <span class="badge text-bg-warning align-middle">admin</span></a>
+    <a class="navbar-brand fw-bold" href="${ADMIN_ROOT}">Blog Turismo <span class="badge text-bg-warning align-middle">admin</span></a>
     <form class="d-flex mb-0" method="post" action="${ADMIN_ROOT}/logout">
       <button class="btn btn-sm btn-outline-light" type="submit">Sair</button>
     </form>
@@ -243,7 +244,7 @@ ${gscMeta}
 <link rel="canonical" href="${esc(canonical)}">
 ${preload}
 <meta property="og:type" content="${t.type}">
-<meta property="og:site_name" content="Blog Turismo IA">
+<meta property="og:site_name" content="Blog Turismo">
 <meta property="og:title" content="${esc(t.ogTitle || t.title)}">
 <meta property="og:description" content="${esc(t.desc)}">
 <meta property="og:url" content="${esc(canonical)}">
@@ -397,7 +398,7 @@ ${nav}
 ${t.body}
 </main>
 <footer class="footer text-center text-body-secondary small py-4 px-3">
-  <a class="link-body-emphasis" href="/">Blog Turismo IA</a> · <a class="link-secondary" href="/sobre">Sobre</a> · <a class="link-secondary" href="/privacidade">Privacidade</a> · Conteúdo informativo gerado automaticamente todos os dias · <a class="link-secondary" href="${ADMIN_ROOT}">Painel</a>
+  <a class="link-body-emphasis" href="/">Blog Turismo</a> · <a class="link-secondary" href="/sobre">Sobre</a> · <a class="link-secondary" href="/privacidade">Privacidade</a> · Conteúdo informativo gerado automaticamente todos os dias · <a class="link-secondary" href="${ADMIN_ROOT}">Painel</a>
 </footer>
 </body>
 </html>`;
@@ -409,7 +410,7 @@ function blogJsonLd() {
   return JSON.stringify({
     "@context": "https://schema.org",
     "@type": "Blog",
-    name: "Blog Turismo IA",
+    name: "Blog Turismo",
     description: DEFAULT_DESC,
     inLanguage: "pt-BR",
   });
@@ -427,8 +428,8 @@ function postJsonLd(a) {
     inLanguage: "pt-BR",
     keywords: (a.tags || []).map((tag) => String(tag).trim()).filter(Boolean).join(", ") || undefined,
     mainEntityOfPage: { "@type": "WebPage", "@id": `${SITE_ORIGIN}/post/${a.slug}/` },
-    author: { "@type": "Organization", name: "Blog Turismo IA" },
-    publisher: { "@type": "Organization", name: "Blog Turismo IA" },
+    author: { "@type": "Organization", name: "Blog Turismo" },
+    publisher: { "@type": "Organization", name: "Blog Turismo" },
   });
 }
 
@@ -623,18 +624,18 @@ function legalPage(origin, path, title, desc, body) {
 }
 
 function sobrePage(origin) {
-  const body = `<h1>Sobre o Blog Turismo IA</h1>
-<p>O <strong>Blog Turismo IA</strong> publica todos os dias roteiros, dicas e guias de destinos para quem gosta de viajar — com foco em lugares do Brasil e do mundo que valem a viagem.</p>
-<p>Os textos são produzidos com apoio de inteligência artificial e organizados por <strong>Lucas</strong>, que mantém o projeto, cuida dos temas e revisa o que vai ao ar. Nosso objetivo é informar de forma direta e útil, sem enrolação.</p>
+  const body = `<h1>Sobre o Blog Turismo</h1>
+<p>O <strong>Blog Turismo</strong> publica todos os dias roteiros, dicas e guias de destinos para quem gosta de viajar — com foco em lugares do Brasil e do mundo que valem a viagem.</p>
+<p>Os textos são produzidos com apoio de ferramentas automatizadas de escrita e organizados por <strong>Lucas</strong>, que mantém o projeto, cuida dos temas e revisa o que vai ao ar. Nosso objetivo é informar de forma direta e útil, sem enrolação.</p>
 <p>Quando indicamos produtos ou serviços, deixamos claro: alguns links são de afiliado e podem gerar uma pequena comissão para o blog, sem custo extra para você.</p>
 <h2>Como o conteúdo é organizado</h2>
 <p>Cada artigo traz um roteiro ou destino com dicas práticas de quando ir, o que fazer e o que levar. A frequência de publicação é diária.</p>`;
-  return legalPage(origin, "/sobre", `Sobre — ${DEFAULT_TITLE}`, "Quem faz o Blog Turismo IA e como o conteúdo é produzido.", body);
+  return legalPage(origin, "/sobre", `Sobre — ${DEFAULT_TITLE}`, "Quem faz o Blog Turismo e como o conteúdo é produzido.", body);
 }
 
 function privacidadePage(origin) {
   const body = `<h1>Política de Privacidade</h1>
-<p>Esta política explica como o Blog Turismo IA trata informações dos visitantes, em linha com a Lei Geral de Proteção de Dados (LGPD).</p>
+<p>Esta política explica como o Blog Turismo trata informações dos visitantes, em linha com a Lei Geral de Proteção de Dados (LGPD).</p>
 <h2>Cookies</h2>
 <p>Este site não usa cookies próprios de rastreamento nem de publicidade, e não identifica visitantes. O único cookie nosso é de sessão do painel administrativo (restrito à equipe).</p>
 <p>Para monetizar os links de parceiros (abaixo), carregamos um script da Travelpayouts que marca o link de afiliado. Ao clicar num link de parceiro, o site de destino pode gravar cookies próprios de atribuição, conforme as políticas dele.</p>
@@ -645,7 +646,7 @@ function privacidadePage(origin) {
 <h2>Seus direitos (LGPD)</h2>
 <p>Como não coletamos dados pessoais de visitantes, normalmente não há dados a excluir. Ainda assim, você pode solicitar informações. ${contactLine()}</p>
 <p>Última atualização: ${new Date().toISOString().slice(0, 10)}.</p>`;
-  return legalPage(origin, "/privacidade", `Privacidade — ${DEFAULT_TITLE}`, "Como o Blog Turismo IA trata cookies, análises e links de afiliado.", body);
+  return legalPage(origin, "/privacidade", `Privacidade — ${DEFAULT_TITLE}`, "Como o Blog Turismo trata cookies, análises e links de afiliado.", body);
 }
 
 const KIT_ITEMS = [
@@ -1122,7 +1123,7 @@ Sitemap: ${origin}/sitemap.xml
     if (path === "/sobre" || path === "/sobre/") return sobrePage(origin);
     if (path === "/privacidade" || path === "/privacidade/") return privacidadePage(origin);
 
-    // llms.txt — índice simples para LLMs/crawlers de IA (Lighthouse "agentic browsing")
+    // llms.txt — índice simples para agentes/crawlers (Lighthouse "agentic browsing")
     if (path === "/llms.txt") {
       let links = "- [Início](" + origin + "/)";
       try {
@@ -1133,7 +1134,7 @@ Sitemap: ${origin}/sitemap.xml
       } catch (e) {
         // lista parcial se API indisponível
       }
-      const body = `# Blog Turismo IA\n\n> ${DEFAULT_DESC}\n\n## Sobre\n\n- [Sobre](${origin}/sobre)\n- [Privacidade](${origin}/privacidade)\n\n## Artigos\n\n${links}\n`;
+      const body = `# Blog Turismo\n\n> ${DEFAULT_DESC}\n\n## Sobre\n\n- [Sobre](${origin}/sobre)\n- [Privacidade](${origin}/privacidade)\n\n## Artigos\n\n${links}\n`;
       return new Response(body, { headers: secured({ "Content-Type": "text/markdown; charset=utf-8" }) });
     }
 

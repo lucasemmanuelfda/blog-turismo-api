@@ -1,12 +1,12 @@
-# Blog Turismo IA
+# Blog Turismo
 
-Blog de turismo com geração automática de conteúdo por IA (API + frontend).
+Blog de turismo com geração automática de conteúdo (API + frontend).
 
 ## Stack
 
 - Python + FastAPI
 - PostgreSQL (Supabase) ou SQLite local
-- Qualquer API de IA compatível com OpenAI
+- Qualquer provedor compatível com a API da OpenAI
 - Cloudflare Worker (frontend SSR com SEO/sitemap/robots)
 
 ## Rodar localmente
