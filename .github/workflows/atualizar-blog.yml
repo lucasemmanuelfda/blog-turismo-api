@@ -35,6 +35,15 @@ jobs:
             echo "Post $id -> HTTP $code"
           done
 
+      - name: Notificar IndexNow (indexação em minutos)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.content }}
+        run: |
+          host="blog-turismo-api.lucasemmanuel2005.workers.dev"
+          key="${{ secrets.INDEXNOW_KEY }}"
+          body=$(jq -nc --arg h "$host" --arg k "$key" '{host:$h,key:$k,keyLocation:("https://" + $h + "/" + $k + ".txt"),urlList:["https://" + $h + "/sitemap.xml"]}')
+          code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "https://api.indexnow.org/indexnow" -H "Content-Type: application/json" -d "$body" || true)
+          echo "IndexNow -> HTTP $code"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -49,6 +58,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          secrets: TRAVELPAYOUTS_MARKER
+          secrets: |
+            TRAVELPAYOUTS_MARKER
+            INDEXNOW_KEY
         env:
           TRAVELPAYOUTS_MARKER: ${{ secrets.TRAVELPAYOUTS_MARKER }}
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}

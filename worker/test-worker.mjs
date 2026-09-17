@@ -265,6 +265,14 @@ async function run() {
   check("gsc 200", gRes.status === 200);
   check("gsc body", gBody.trim() === "google-site-verification: googlea1b2c3d4e5f6a7b8.html");
 
+  // IndexNow: /<key>.txt serve a chave; sem env, a rota não existe
+  const iKey = "a1b2c3d4e5f6a7b8c9d0";
+  const iRes = await worker.fetch({ url: SITE + "/" + iKey + ".txt" }, { INDEXNOW_KEY: iKey }, {});
+  check("indexnow key 200", iRes.status === 200);
+  check("indexnow body", (await iRes.text()).trim() === iKey);
+  const iNoKey = await worker.fetch({ url: SITE + "/" + iKey + ".txt" }, {}, {});
+  check("indexnow sem env nao vaza chave", !(await iNoKey.text()).includes(iKey));
+
   // sitemap.xml
   const smRes = await worker.fetch({ url: SITE + "/sitemap.xml" }, {}, {});
   const sm = await smRes.text();

@@ -1179,6 +1179,15 @@ export default {
       });
     }
 
+    // Verificação do IndexNow: o protocolo exige servir /<key>.txt com o texto
+    // da chave. A chave vem do env (secret do worker); sem ela, a rota não existe.
+    const iKey = (env?.INDEXNOW_KEY || "").trim();
+    if (iKey && path === `/${iKey}.txt`) {
+      return new Response(iKey, {
+        headers: secured({ "Content-Type": "text/plain; charset=utf-8" }),
+      });
+    }
+
     // Favicon
     if (path === "/favicon.svg" || path === "/favicon.ico") {
       return new Response(FAVICON_SVG, {
