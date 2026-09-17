@@ -52,12 +52,18 @@ export const WIDGET_INLINE = `(function () {
 })();`;
 export const WIDGET_HASH = "sha256-nx/OTx4+RN+jKDTGnHFEMQ4VA0/xf0BabOwl4f+oyd8=";
 
+// Alternância manual de tema claro/escuro. Script inline com hash no CSP (como o
+// widget). Sem JS, o CSS segue a preferência do sistema; com JS, data-theme vence.
+export const THEME_INLINE = `(function(){var k="tp-tema",r=document.documentElement;try{var s=localStorage.getItem(k);if(s)r.dataset.theme=s}catch(e){}document.addEventListener("DOMContentLoaded",function(){var b=document.getElementById("tema");if(!b)return;var t=r.getAttribute("data-theme");b.textContent=t==="dark"?"Modo claro":"Modo escuro";b.onclick=function(){var n=r.getAttribute("data-theme")==="dark"?"light":"dark";r.dataset.theme=n;b.textContent=n==="dark"?"Modo claro":"Modo escuro";try{localStorage.setItem(k,n)}catch(e){}}})})();`;
+export const THEME_HASH = "sha256-sjKlMHpd7IbfRh3F1gF5wESbwFKyZXOUGbJ8xQ9IGqQ=";
+
 const cspList = (extra) => ["'self'", ...extra.filter(Boolean)].join(" ");
 const CSP = `default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests; script-src ${cspList([
   CF_BEACON_TOKEN && "https://static.cloudflareinsights.com",
   DRIVE_SRC && "https://emrld.ltd",
   WIDGET_INLINE && "https://tpemd.com",
   WIDGET_INLINE && `'${WIDGET_HASH}'`,
+  THEME_INLINE && `'${THEME_HASH}'`,
 ])}; connect-src ${cspList([
   CF_BEACON_TOKEN && "https://cloudflareinsights.com",
   DRIVE_SRC && "https://emrld.ltd",
@@ -220,6 +226,7 @@ function publicNav() {
   <div class="container d-flex flex-wrap align-items-center justify-content-between gap-2">
     <a class="navbar-brand fw-bold" href="/">Blog Turismo</a>
     <span class="navbar-text small opacity-75">Destinos, roteiros e dicas de viagem.</span>
+    <button id="tema" class="btn btn-sm btn-outline-light" type="button" aria-label="Alternar tema claro-escuro">Modo escuro</button>
   </div>
 </nav>`;
 }
@@ -269,7 +276,7 @@ ${ogImage ? `<meta property="og:image" content="${esc(ogImage)}">
 ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
 <style>
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --brand-1:#0e7490;
   --brand-2:#6d28d9;
   --bs-body-bg:#f6f3ee;
@@ -288,8 +295,20 @@ ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
   --bs-secondary-color:#5c6874;
   --bs-tertiary-bg:#efece5;
 }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bs-body-bg:#10151c;
+  --bs-body-color:#e4ebf2;
+  --bs-link-color:#53b6d4;
+  --bs-link-hover-color:#7bcbe4;
+  --bs-card-bg:#182029;
+  --bs-card-border-color:#2b3540;
+  --bs-secondary-color:#93a0ae;
+  --bs-tertiary-bg:#151c24;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bs-body-bg:#10151c;
     --bs-body-color:#e4ebf2;
     --bs-link-color:#53b6d4;
@@ -404,6 +423,7 @@ code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em;
 </style>
 ${!t.admin && DRIVE_SRC ? `<script async data-cmp-ab="2" src="${esc(DRIVE_SRC)}"></script>` : ""}
 ${!t.admin && WIDGET_INLINE ? `<script>${WIDGET_INLINE}</script>` : ""}
+${!t.admin && THEME_INLINE ? `<script>${THEME_INLINE}</script>` : ""}
 ${!t.admin && CF_BEACON_TOKEN ? `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="${esc(JSON.stringify({ token: CF_BEACON_TOKEN }))}"></script>` : ""}
 </head>
 <body class="d-flex flex-column min-vh-100">
@@ -451,8 +471,8 @@ function postJsonLd(a) {
 
 // ---------- Acesso à API ----------
 
-async function fetchPosts(limit = 30) {
-  const u = `${API_BASE_URL}/posts?status=published&limit=${limit}`;
+async function fetchPosts(limit = 30, offset = 0) {
+  const u = `${API_BASE_URL}/posts?status=published&limit=${limit}&offset=${offset}`;
   const res = await fetch(u, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error("API " + res.status);
   return res.json();
@@ -574,33 +594,53 @@ function heroHtml(p) {
 </article>`;
 }
 
-async function home(request, origin) {
-  let posts = [];
-  try {
-    posts = await fetchPosts(15);
-  } catch (e) {
-    // Fallback: ainda renderiza a página mas com aviso
+const HOME_PAGE_SIZE = 5;
+
+async function home(request, origin, pageNum = 1) {
+  const p = Math.max(1, pageNum | 0);
+  const posts = (async () => {
+    try {
+      return await fetchPosts(50, (p - 1) * HOME_PAGE_SIZE);
+    } catch (e) {
+      // Fallback: ainda renderiza a página mas com aviso
+      return [];
+    }
+  })();
+  const all = await posts;
+  const list = all.slice(0, HOME_PAGE_SIZE);
+  // Contagem exata só quando o fetch não satura (limit 50); se saturar, mostra a
+  // página sem número, pois o total é desconhecido. ponytail: single-request pagination.
+  const exact = all.length < 50;
+  const remaining = exact ? Math.max(0, all.length - HOME_PAGE_SIZE) : null;
+  const nextHref = `${origin}/page/${p + 1}/`;
+  const nav = [];
+  if (p > 1) {
+    nav.push(`<a class="btn btn-outline-primary" href="${origin}/page/${p - 1}/" rel="prev">Posts anteriores</a>`);
+  }
+  if ((exact && remaining > 0) || all.length === 50) {
+    nav.push(`<a class="btn btn-primary" href="${esc(nextHref)}" rel="next">Ver mais posts${exact && remaining > 0 ? ` (${remaining} restantes)` : ""}</a>`);
   }
   let hero = "";
-  let grid = posts;
+  let grid = list;
   let heroImage = "";
-  if (posts[0] && posts[0].cover_image) {
-    heroImage = thumb(cleanImageUrl(posts[0].cover_image));
-    hero = heroHtml(posts[0]);
-    grid = posts.slice(1);
+  if (p === 1 && list[0] && list[0].cover_image) {
+    heroImage = thumb(cleanImageUrl(list[0].cover_image));
+    hero = heroHtml(list[0]);
+    grid = list.slice(1, HOME_PAGE_SIZE);
   }
   const body = `<h1 class="visually-hidden">Últimos artigos</h1>
 ${hero}
-<div class="d-flex align-items-center mb-3">
+${list.length ? `<div class="d-flex align-items-center mb-3">
   <h2 class="h6 text-uppercase text-body-secondary mb-0">Artigos recentes</h2>
 </div>
-<div class="row g-4 post-grid">${cardsHtml(grid)}</div>`;
+<div class="row g-4 post-grid">${cardsHtml(grid)}</div>
+${nav.length ? `<nav class="d-flex gap-2 justify-content-center mt-5" aria-label="Paginação">${nav.join("")}</nav>` : ""}` : `<p>Nenhum artigo publicado ainda.</p>`}`;
   return new Response(
     page({
       type: "website",
-      title: DEFAULT_TITLE,
+      title: p === 1 ? DEFAULT_TITLE : `Pág. ${p} — ${DEFAULT_TITLE}`,
       desc: DEFAULT_DESC,
-      canonical: origin + "/",
+      canonical: p === 1 ? origin + "/" : `${origin}/page/${p}/`,
       origin,
       image: heroImage,
       body,
@@ -1196,6 +1236,16 @@ ${links}
     if (path.startsWith("/post/")) {
       const slug = handleSlugUrl(origin, path);
       if (slug) return postPage(request, origin, slug, env?.TRAVELPAYOUTS_MARKER);
+    }
+
+    // Paginação da home: /page/<n>/
+    if (path.startsWith("/page/")) {
+      const n = path.match(/^\/page\/(\d+)\/$/) || path.match(/^\/page\/(\d+)$/);
+      if (n) return home(request, origin, parseInt(n[1], 10));
+      return new Response("Página não encontrada", {
+        status: 404,
+        headers: secured({ "Content-Type": "text/plain; charset=utf-8" }),
+      });
     }
 
     // Home (default)

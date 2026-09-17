@@ -1,6 +1,6 @@
 // Harness de teste local do Worker (Node >= 24). Sem dependências.
 // Roda com: node worker/test-worker.mjs  (na raiz do repo)
-import worker, { TRAVEL_AFFILIATES, WIDGET_INLINE, WIDGET_HASH } from "./worker.js";
+import worker, { TRAVEL_AFFILIATES, WIDGET_INLINE, WIDGET_HASH, THEME_INLINE, THEME_HASH } from "./worker.js";
 
 const SITE = "https://exemplo.workers.dev";
 
@@ -35,6 +35,31 @@ const posts = [fakePost(), {
   slug: "segundo-rota",
   title: "Segunda Rota",
   cover_image: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Cidades_2.jpg/1280px-Cidades_2.jpg",
+}, {
+  ...fakePost(),
+  id: 3,
+  slug: "terceiro-rota",
+  title: "Terceira Rota",
+}, {
+  ...fakePost(),
+  id: 4,
+  slug: "quarto-rota",
+  title: "Quarta Rota",
+}, {
+  ...fakePost(),
+  id: 5,
+  slug: "quinto-rota",
+  title: "Quinta Rota",
+}, {
+  ...fakePost(),
+  id: 6,
+  slug: "sexto-rota",
+  title: "Sexta Rota",
+}, {
+  ...fakePost(),
+  id: 7,
+  slug: "setimo-rota",
+  title: "Sétima Rota",
 }];
 
 let lastAdminAuth = null;
@@ -60,7 +85,10 @@ globalThis.fetch = async (input, init) => {
     return jsonResponse(posts[0]);
   }
   if (url.includes("/posts?status=published")) {
-    return jsonResponse(posts);
+    const q = new URL(url);
+    const limit = +(q.searchParams.get("limit") || 20);
+    const offset = +(q.searchParams.get("offset") || 0);
+    return jsonResponse(posts.slice(offset, offset + limit));
   }
   return jsonResponse({ error: "not found" }, 404);
 };
@@ -114,11 +142,32 @@ async function run() {
   check("csp permite widget tpemd", homeCsp.includes("script-src 'self' https://emrld.ltd https://tpemd.com"));
   check("csp widget hash", homeCsp.includes(`'${WIDGET_HASH}'`));
   check("csp connect tpemd", homeCsp.includes("connect-src 'self' https://emrld.ltd https://tpemd.com"));
+  check("csp tema hash", homeCsp.includes(`'${THEME_HASH}'`));
+  check("home botao tema", home.includes('<button id="tema"'));
+  check("home script tema", home.includes('getElementById("tema")'));
 
   // guarda contra drift: o hash fixado no CSP precisa bater com o conteúdo do loader
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(WIDGET_INLINE));
   const b64 = btoa(String.fromCharCode(...new Uint8Array(digest)));
   check("csp widget hash bate com inline", `sha256-${b64}` === WIDGET_HASH);
+  const tDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(THEME_INLINE));
+  const tB64 = btoa(String.fromCharCode(...new Uint8Array(tDigest)));
+  check("csp tema hash bate com inline", `sha256-${tB64}` === THEME_HASH);
+
+  // Home mostra só 5 posts (hero + 4 cards) + botão com o número de restantes
+  check("home 5 posts (4 cards + hero)", (home.match(/<article class="col-md-6 col-lg-4"/g) || []).length === 4);
+  check("home ver mais restantes", home.includes("Ver mais posts (2 restantes)"));
+  check("home ver mais link next", home.includes('rel="next"') && home.includes(`${SITE}/page/2/`));
+
+  // Paginação /page/N/ (renderizada no servidor: crawlável, sem JS)
+  const page2Res = await worker.fetch({ url: SITE + "/page/2/" }, {}, {});
+  const page2 = await page2Res.text();
+  check("page2 status 200", page2Res.status === 200);
+  check("page2 canonical", page2.includes('rel="canonical" href="' + SITE + '/page/2/"'));
+  check("page2 2 cards", (page2.match(/<article class="col-md-6 col-lg-4"/g) || []).length === 2);
+  check("page2 prev", page2.includes('rel="prev"'));
+  check("page2 sem hero", !page2.includes('class="card hero'));
+  check("page2 sem ver mais", !page2.includes("Ver mais posts"));
 
   const llmsRes = await worker.fetch({ url: SITE + "/llms.txt" }, {}, {});
   const llms = await llmsRes.text();
@@ -250,6 +299,7 @@ async function run() {
   check("admin login campo usuario", adminPage.includes('name="username"'));
   check("admin sem drive", !adminPage.includes("emrld.ltd"));
   check("admin sem widget", !adminPage.includes("tpemd.com"));
+  check("admin sem tema", !adminPage.includes('id="tema"'));
   check("admin x-robots-tag", (adminNoCookie.headers.get("X-Robots-Tag") || "").includes("noindex"));
 
   const loginRes = await worker.fetch(
