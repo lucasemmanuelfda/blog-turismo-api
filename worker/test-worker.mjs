@@ -173,6 +173,11 @@ async function run() {
   check("viagem booking aid", postAff.includes("booking.com/searchresults.html?aid=7890"));
   check("viagem sponsored", postAff.includes('rel="sponsored nofollow noopener"'));
 
+  // marker de produção vem do env (secret do Cloudflare), não do código
+  const postEnv = await (await worker.fetch({ url: SITE + "/post/roteiro-de-3-dias-em-gramado/" }, { TRAVELPAYOUTS_MARKER: "778478" }, {})).text();
+  check("viagem env marker", postEnv.includes("aviasales.com/?marker=778478"));
+  check("viagem env sem booking", !postEnv.includes("booking.com"));
+
   const tagRes = await worker.fetch({ url: SITE + "/tag/gramado/" }, {}, {});
   const tag = await tagRes.text();
   check("tag status 200", tagRes.status === 200);

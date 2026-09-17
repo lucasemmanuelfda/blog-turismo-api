@@ -686,8 +686,8 @@ function kitHtml(post) {
 </section>`;
 }
 
-function travelHtml(post) {
-  const marker = TRAVEL_AFFILIATES.travelpayouts;
+function travelHtml(post, travelMarker) {
+  const marker = String(travelMarker || "").trim() || TRAVEL_AFFILIATES.travelpayouts;
   const booking = TRAVEL_AFFILIATES.booking;
   if (!marker && !booking) return "";
   const dest = ((post.tags || [])[0] || post.title || "").trim();
@@ -707,7 +707,7 @@ function travelHtml(post) {
 </section>`;
 }
 
-async function postPage(request, origin, slug) {
+async function postPage(request, origin, slug, travelMarker) {
   const post = await fetchPost(slug);
   if (!post) {
     return new Response("Artigo não encontrado", {
@@ -750,7 +750,7 @@ async function postPage(request, origin, slug) {
         ${tocHtml ? `<div class="col-lg-9 content">${content}</div>${tocHtml}` : `<div class="col-lg-12 content">${content}</div>`}
       </div>
       ${kitHtml(post)}
-      ${travelHtml(post)}
+      ${travelHtml(post, travelMarker)}
     </div>
   </div>
 </article>`;
@@ -1177,7 +1177,7 @@ ${links}
     // Slug real: /post/<slug>/
     if (path.startsWith("/post/")) {
       const slug = handleSlugUrl(origin, path);
-      if (slug) return postPage(request, origin, slug);
+      if (slug) return postPage(request, origin, slug, env?.TRAVELPAYOUTS_MARKER);
     }
 
     // Home (default)
