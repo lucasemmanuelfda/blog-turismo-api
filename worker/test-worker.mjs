@@ -270,11 +270,17 @@ async function run() {
   const sm = await smRes.text();
   check("sitemap xml header", sm.startsWith("<?xml"));
   check("sitemap home loc", sm.includes("<loc>" + SITE + "/</loc>"));
+  check("sitemap home lastmod", /<loc>https:\/\/exemplo\.workers\.dev\/<\/loc>\s*<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/.test(sm));
   check("sitemap post loc", sm.includes(`<loc>${SITE}/post/roteiro-de-3-dias-em-gramado/</loc>`));
   check("sitemap lastmod YYYY-MM-DD", /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/.test(sm));
   check("sitemap lastmod sem horario", !/T\d{2}/.test(sm));
   check("sitemap sobre", sm.includes("<loc>" + SITE + "/sobre</loc>"));
   check("sitemap privacidade", sm.includes("<loc>" + SITE + "/privacidade</loc>"));
+  check("sitemap page 2", sm.includes("<loc>" + SITE + "/page/2/</loc>"));
+  check("sitemap tag gramado", sm.includes("<loc>" + SITE + "/tag/gramado/</loc>"));
+  check("sitemap tag acentuada encoded", sm.includes("<loc>" + SITE + "/tag/serra-ga%C3%BAcha/</loc>"));
+  check("sitemap sem changefreq", !sm.includes("<changefreq>"));
+  check("sitemap cache 1 dia", (smRes.headers.get("Cache-Control") || "").includes("max-age=86400"));
 
   // Páginas institucionais
   const sobreRes = await worker.fetch({ url: SITE + "/sobre" }, {}, {});

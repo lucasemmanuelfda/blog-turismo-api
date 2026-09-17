@@ -478,6 +478,18 @@ async function fetchPosts(limit = 30, offset = 0) {
   return res.json();
 }
 
+async function fetchAllPosts() {
+  const all = [];
+  let offset = 0;
+  while (true) {
+    const batch = await fetchPosts(50, offset);
+    all.push(...batch);
+    if (batch.length < 50) break;
+    offset += batch.length;
+  }
+  return all;
+}
+
 async function fetchPost(slug) {
   const u = `${API_BASE_URL}/posts/${encodeURIComponent(slug)}`;
   const res = await fetch(u, { headers: { Accept: "application/json" } });
@@ -1207,23 +1219,39 @@ Sitemap: ${origin}/sitemap.xml
 
     // Sitemap.xml — gerado dinamicamente a partir dos posts publicados
     if (path === "/sitemap.xml") {
+      let posts = [];
       let links = "";
       try {
-        const posts = await fetchPosts();
+        posts = await fetchAllPosts();
         for (const p of posts) {
           links += `<url><loc>${origin}/post/${esc(p.slug)}/</loc><lastmod>${sitemapDate(p.updated_at || p.published_at)}</lastmod></url>`;
         }
       } catch (e) {
-        // sitemap vazio se API indisponível
+        // sitemap com só páginas estáticas se API indisponível
+      }
+      const totalPages = Math.max(1, Math.ceil(posts.length / HOME_PAGE_SIZE));
+      let paginationLinks = "";
+      for (let i = 2; i <= totalPages; i++) {
+        paginationLinks += `<url><loc>${origin}/page/${i}/</loc><lastmod>${sitemapDate(posts[0] && (posts[0].updated_at || posts[0].published_at))}</lastmod></url>`;
+      }
+      const tagSet = new Set();
+      for (const p of posts) {
+        for (const t of (p.tags || [])) {
+          const s = String(t).trim();
+          if (s) tagSet.add(s);
+        }
+      }
+      let tagLinks = "";
+      for (const t of tagSet) {
+        tagLinks += `<url><loc>${origin}/tag/${esc(slugTag(t))}/</loc></url>`;
       }
       const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>${origin}/</loc><changefreq>daily</changefreq></url>
-  <url><loc>${origin}/sobre</loc><changefreq>monthly</changefreq></url>
-  <url><loc>${origin}/privacidade</loc><changefreq>monthly</changefreq></url>
-${links}
-</urlset>`;
-      return new Response(body, { headers: secured({ "Content-Type": "application/xml; charset=utf-8" }) });
+  <url><loc>${origin}/</loc><lastmod>${sitemapDate(posts[0] && (posts[0].updated_at || posts[0].published_at))}</lastmod></url>
+  <url><loc>${origin}/sobre</loc></url>
+  <url><loc>${origin}/privacidade</loc></url>
+${paginationLinks}${links}${tagLinks}</urlset>`;
+      return new Response(body, { headers: secured({ "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=86400, s-maxage=86400" }) });
     }
 
     // Página de tag: /tag/<tag>/
