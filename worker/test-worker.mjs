@@ -1,6 +1,6 @@
 // Harness de teste local do Worker (Node >= 24). Sem dependências.
 // Roda com: node worker/test-worker.mjs  (na raiz do repo)
-import worker, { TRAVEL_AFFILIATES } from "./worker.js";
+import worker, { TRAVEL_AFFILIATES, WIDGET_INLINE, WIDGET_HASH } from "./worker.js";
 
 const SITE = "https://exemplo.workers.dev";
 
@@ -105,11 +105,20 @@ async function run() {
   check("home cache-control", (homeRes.headers.get("Cache-Control") || "").includes("max-age=300"));
   check("home sem analytics (token vazio)", !home.includes("cloudflareinsights"));
   check("home drive script", home.includes('src="https://emrld.ltd/NTc0Nzcw.js?t=574770"'));
+  check("home widget loader", home.includes('script.src = "https://tpemd.com/wl_web/main.js?wl_id=22236"'));
   const homeCsp = homeRes.headers.get("Content-Security-Policy") || "";
   check("csp baseline", homeCsp.includes("default-src 'self'"));
   check("csp sem cloudflare (token vazio)", !homeCsp.includes("cloudflareinsights"));
   check("csp permite drive", homeCsp.includes("script-src 'self' https://emrld.ltd"));
   check("csp connect drive", homeCsp.includes("connect-src 'self' https://emrld.ltd"));
+  check("csp permite widget tpemd", homeCsp.includes("script-src 'self' https://emrld.ltd https://tpemd.com"));
+  check("csp widget hash", homeCsp.includes(`'${WIDGET_HASH}'`));
+  check("csp connect tpemd", homeCsp.includes("connect-src 'self' https://emrld.ltd https://tpemd.com"));
+
+  // guarda contra drift: o hash fixado no CSP precisa bater com o conteúdo do loader
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(WIDGET_INLINE));
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(digest)));
+  check("csp widget hash bate com inline", `sha256-${b64}` === WIDGET_HASH);
 
   const llmsRes = await worker.fetch({ url: SITE + "/llms.txt" }, {}, {});
   const llms = await llmsRes.text();
@@ -160,7 +169,10 @@ async function run() {
   check("post kit disclosure", post.includes("afiliado da Amazon"));
   check("post kit cta", post.includes("Ver na Amazon"));
   check("post kit sponsored", post.includes('rel="sponsored nofollow noopener"'));
-  check("post sem bloco viagem (ids vazios)", !post.includes("Planeje a viagem"));
+  check("post bloco viagem com widget (ids vazios)", post.includes("Planeje a viagem"));
+  check("post widget search container", post.includes('id="tpwl-search"'));
+  check("post widget tickets container", post.includes('id="tpwl-tickets"'));
+  check("post sem aviasales (ids vazios)", !post.includes("aviasales.com/?marker="));
 
   // bloco de afiliados de viagem com IDs injetados
   TRAVEL_AFFILIATES.travelpayouts = "123456";
@@ -237,6 +249,7 @@ async function run() {
   check("admin noindex", adminPage.includes('content="noindex, nofollow"'));
   check("admin login campo usuario", adminPage.includes('name="username"'));
   check("admin sem drive", !adminPage.includes("emrld.ltd"));
+  check("admin sem widget", !adminPage.includes("tpemd.com"));
   check("admin x-robots-tag", (adminNoCookie.headers.get("X-Robots-Tag") || "").includes("noindex"));
 
   const loginRes = await worker.fetch(

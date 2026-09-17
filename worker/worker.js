@@ -40,13 +40,28 @@ const CF_BEACON_TOKEN = "";
 // vazio desliga o script.
 const DRIVE_SRC = "https://emrld.ltd/NTc0Nzcw.js?t=574770";
 
+// Travelpayouts White Label: metasearch de voos. O loader é inline (hash fixado no CSP
+// abaixo); vazio desliga o script e os containers. O hash cobre o texto exato de
+// WIDGET_INLINE — conferido pelo check "csp widget hash" no test-worker.mjs.
+export const WIDGET_INLINE = `(function () {
+  var script = document.createElement("script");
+  script.async = 1;
+  script.type = "module";
+  script.src = "https://tpemd.com/wl_web/main.js?wl_id=22236";
+  document.head.appendChild(script);
+})();`;
+export const WIDGET_HASH = "sha256-nx/OTx4+RN+jKDTGnHFEMQ4VA0/xf0BabOwl4f+oyd8=";
+
 const cspList = (extra) => ["'self'", ...extra.filter(Boolean)].join(" ");
 const CSP = `default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests; script-src ${cspList([
   CF_BEACON_TOKEN && "https://static.cloudflareinsights.com",
   DRIVE_SRC && "https://emrld.ltd",
+  WIDGET_INLINE && "https://tpemd.com",
+  WIDGET_INLINE && `'${WIDGET_HASH}'`,
 ])}; connect-src ${cspList([
   CF_BEACON_TOKEN && "https://cloudflareinsights.com",
   DRIVE_SRC && "https://emrld.ltd",
+  WIDGET_INLINE && "https://tpemd.com",
 ])}`;
 
 const SECURITY_HEADERS = {
@@ -388,6 +403,7 @@ code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em;
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 </style>
 ${!t.admin && DRIVE_SRC ? `<script async data-cmp-ab="2" src="${esc(DRIVE_SRC)}"></script>` : ""}
+${!t.admin && WIDGET_INLINE ? `<script>${WIDGET_INLINE}</script>` : ""}
 ${!t.admin && CF_BEACON_TOKEN ? `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="${esc(JSON.stringify({ token: CF_BEACON_TOKEN }))}"></script>` : ""}
 </head>
 <body class="d-flex flex-column min-vh-100">
@@ -689,7 +705,7 @@ function kitHtml(post) {
 function travelHtml(post, travelMarker) {
   const marker = String(travelMarker || "").trim() || TRAVEL_AFFILIATES.travelpayouts;
   const booking = TRAVEL_AFFILIATES.booking;
-  if (!marker && !booking) return "";
+  if (!marker && !booking && !WIDGET_INLINE) return "";
   const dest = ((post.tags || [])[0] || post.title || "").trim();
   const q = encodeURIComponent(dest);
   const sub = encodeURIComponent(post.slug || "");
@@ -703,7 +719,9 @@ function travelHtml(post, travelMarker) {
   return `<section class="kit mt-5" aria-label="Planeje a viagem">
   <h2 class="h4 mb-1">Planeje a viagem</h2>
   <p class="text-body-secondary small mb-3">Links de parceiros. Reservando por eles, o blog ganha uma pequena comissão sem custo extra para você.</p>
-  <div class="d-flex flex-wrap gap-2">${links.join("")}</div>
+  ${links.length ? `<div class="d-flex flex-wrap gap-2 mb-4">${links.join("")}</div>` : ""}
+  ${WIDGET_INLINE ? `<div id="tpwl-search" aria-label="Busca de voos"></div>
+  <div id="tpwl-tickets" aria-label="Resultados de voos"></div>` : ""}
 </section>`;
 }
 
