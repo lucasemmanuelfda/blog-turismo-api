@@ -71,7 +71,7 @@ jobs:
           since=$(date -u -d "24 hours ago" +%Y-%m-%dT%H:%M:%S)
           slugs=$(curl -sS --retry 6 --retry-delay 15 --retry-all-errors \
             "${{ vars.API_URL }}/posts?status=published&limit=50" \
-            | jq -r --arg s "$since" '.[] | select(.published_at >= $s) | .slug')
+            | jq -r --arg s "$since" '.[] | select(.published_at >= $s) | .slug' || true)
           if [ -z "$slugs" ]; then echo "Nada novo nas Ãºltimas 24h."; exit 0; fi
           count=0
           for slug in $slugs; do
@@ -79,7 +79,7 @@ jobs:
               "https://indexing.googleapis.com/v3/urlNotifications:publish" \
               -H "Authorization: Bearer ${{ steps.google-auth.outputs.access_token }}" \
               -H "Content-Type: application/json" \
-              -d "{\"url\":\"https://$host/post/$slug/\",\"type\":\"URL_UPDATED\"}")
+              -d "{\"url\":\"https://$host/post/$slug/\",\"type\":\"URL_UPDATED\"}" || true)
             if [ "$code" = 429 ]; then
               cat /tmp/google-index.json || true
               echo "Cota diÃ¡ria do Google excedida (HTTP 429) â€” amanhÃ£ tenta os novos."
