@@ -61,3 +61,11 @@ class Post(Base):
         ForeignKey("categories.id"), nullable=True
     )
     category: Mapped[Category | None] = relationship(back_populates="posts")
+
+    # Blog relacionado (tema correlacionado) — substitui as tags na interface.
+    related_post_id: Mapped[int | None] = mapped_column(
+        ForeignKey("posts.id"), nullable=True
+    )
+    related_post: Mapped["Post | None"] = relationship(
+        remote_side="Post.id", foreign_keys=[related_post_id]
+    )

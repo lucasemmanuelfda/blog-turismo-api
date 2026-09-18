@@ -27,6 +27,9 @@ def migrate():
     if "kit_recommendations" not in columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE posts ADD COLUMN kit_recommendations TEXT NOT NULL DEFAULT '[]'"))
+    if "related_post_id" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE posts ADD COLUMN related_post_id INTEGER REFERENCES posts(id)"))
 
 
 def get_db():

@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Sequence
 
@@ -37,6 +38,51 @@ def _all_post_slugs(db: Session) -> list[str]:
     return list(db.scalars(select(models.Post.slug)).all())
 
 
+def _post_words(post: models.Post) -> set[str]:
+    source = " ".join([
+        post.title or "",
+        *post.keywords.split(","),
+        *post.tags.split(","),
+    ])
+    return {w for w in re.findall(r"[a-z0-9\u00e0-\u00ff]+", source.lower()) if len(w) > 2}
+
+
+def _related_score(a: models.Post, b: models.Post) -> int:
+    """Quão correlacionados dois posts são: mesma categoria + palavras em comum."""
+    score = 10 if (a.category_id and a.category_id == b.category_id) else 0
+    score += len(_post_words(a) & _post_words(b))
+    return score
+
+
+def find_related_post(db: Session, post: models.Post) -> models.Post | None:
+    """Melhor post de tema correlacionado (publicado > rascunho, sem espelho)."""
+    candidates = list(db.scalars(select(models.Post).where(models.Post.id != post.id)))
+    if not candidates:
+        return None
+    # ponytail: O(n²) por post no backfill; irrelevante para blogs (< 1k posts).
+    def key(c: models.Post):
+        mirror = 1 if c.related_post_id == post.id else 0
+        unpublished = 0 if c.status == "published" else 1
+        return (-_related_score(post, c), unpublished, mirror, c.id)
+
+    for c in sorted(candidates, key=key):
+        if _related_score(post, c) > 0:
+            return c
+    return None
+
+
+def backfill_related_posts(db: Session) -> int:
+    """Aponta posts já criados e novos para o blog correlacionado (cadeia padrão)."""
+    changed = 0
+    for post in db.scalars(select(models.Post).order_by(models.Post.id)).all():
+        target = find_related_post(db, post)
+        if target and post.related_post_id != target.id:
+            post.related_post_id = target.id
+            changed += 1
+    db.commit()
+    return changed
+
+
 def create_post(db: Session, data: schemas.PostCreate) -> models.Post:
     post = models.Post(
         title=data.title,
@@ -52,7 +98,12 @@ def create_post(db: Session, data: schemas.PostCreate) -> models.Post:
         meta_title=data.meta_title or data.title,
         meta_description=data.meta_description,
         category_id=data.category_id,
+        related_post_id=data.related_post_id,
     )
+    if not post.related_post_id:
+        target = find_related_post(db, post)
+        if target:
+            post.related_post_id = target.id
     if data.status == "published" and not post.published_at:
         post.published_at = utcnow()
     db.add(post)

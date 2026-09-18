@@ -1,4 +1,4 @@
-name: Atualizar blog (gera, publica e deploys)
+﻿name: Atualizar blog (gera, publica e deploys)
 
 on:
   schedule:
@@ -35,7 +35,7 @@ jobs:
             echo "Post $id -> HTTP $code"
           done
 
-      - name: Notificar IndexNow (indexação em minutos)
+      - name: Notificar IndexNow (indexaÃ§Ã£o em minutos)
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.content }}
         run: |
           host="blog-turismo-api.lucasemmanuel2005.workers.dev"
@@ -44,7 +44,50 @@ jobs:
           code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "https://api.indexnow.org/indexnow" -H "Content-Type: application/json" -d "$body" || true)
           echo "IndexNow -> HTTP $code"
 
+      - name: Reapontar blogs para o tema correlacionado (cadeia)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.content }}
+        run: |
+          curl -sS -X POST "${{ vars.API_URL }}/posts/relink" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_KEY }}" \
+            -w "\nHTTP %{http_code}\n"
+
       - uses: actions/checkout@v4
+
+      - name: Autenticar no Google (Indexing API)
+        id: google-auth
+        if: ${{ secrets.GOOGLE_CREDENTIALS != '' && (github.event_name != 'workflow_dispatch' || inputs.content) }}
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
+          token_format: 'access_token'
+          access_token_scopes: 'https://www.googleapis.com/auth/indexing'
+
+      - name: Notificar Google Indexing (sÃ³ posts novos/atualizados nas Ãºltimas 24h)
+        if: ${{ steps.google-auth.conclusion == 'success' }}
+        run: |
+          # A cota do Google Ã© 200 URLs/dia por propriedade; enviamos sÃ³ o que mudou.
+          host="blog-turismo-api.lucasemmanuel2005.workers.dev"
+          since=$(date -u -d "24 hours ago" +%Y-%m-%dT%H:%M:%S)
+          slugs=$(curl -sS --retry 6 --retry-delay 15 --retry-all-errors \
+            "${{ vars.API_URL }}/posts?status=published&limit=50" \
+            | jq -r --arg s "$since" '.[] | select(.published_at >= $s) | .slug')
+          if [ -z "$slugs" ]; then echo "Nada novo nas Ãºltimas 24h."; exit 0; fi
+          count=0
+          for slug in $slugs; do
+            code=$(curl -sS -o /tmp/google-index.json -w "%{http_code}" -X POST \
+              "https://indexing.googleapis.com/v3/urlNotifications:publish" \
+              -H "Authorization: Bearer ${{ steps.google-auth.outputs.access_token }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"url\":\"https://$host/post/$slug/\",\"type\":\"URL_UPDATED\"}")
+            if [ "$code" = 429 ]; then
+              cat /tmp/google-index.json || true
+              echo "Cota diÃ¡ria do Google excedida (HTTP 429) â€” amanhÃ£ tenta os novos."
+              exit 0
+            fi
+            echo "Google Indexing $slug -> HTTP $code"
+            count=$((count+1))
+            [ "$count" -ge 200 ] && { echo "Limite de 200 URLs atingido."; exit 0; }
+          done
 
       - uses: actions/setup-node@v4
         with:

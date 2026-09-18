@@ -41,6 +41,7 @@ class PostBase(BaseModel):
     meta_title: str = ""
     meta_description: str = ""
     category_id: int | None = None
+    related_post_id: int | None = None
 
 
 class PostCreate(PostBase):
@@ -60,6 +61,17 @@ class PostUpdate(BaseModel):
     meta_title: str | None = None
     meta_description: str | None = None
     category_id: int | None = None
+    related_post_id: int | None = None
+
+
+class RelatedPostRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    slug: str
+    summary: str
+    cover_image: str | None
 
 
 class PostRead(BaseModel):
@@ -84,6 +96,7 @@ class PostRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     category_id: int | None
+    related_post: RelatedPostRead | None = None
 
     @field_validator("keywords", "tags", "kit_recommendations", mode="before")
     @classmethod

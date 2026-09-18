@@ -101,6 +101,49 @@ def test_post_crud():
     assert r.status_code == 204
 
 
+def test_related_post_links_by_theme_and_relink():
+    cat = client.post(
+        "/categories",
+        json={"name": "Serra", "description": "s"},
+        headers={"Authorization": "Bearer teste123"},
+    ).json()
+
+    p1 = client.post(
+        "/posts",
+        json={
+            "title": "Gramado no inverno",
+            "category_id": cat["id"],
+            "keywords": ["gramado", "inverno"],
+            "status": "draft",
+        },
+        headers={"Authorization": "Bearer teste123"},
+    ).json()
+    client.post(f"/posts/{p1['id']}/publish", headers={"Authorization": "Bearer teste123"})
+
+    p2 = client.post(
+        "/posts",
+        json={
+            "title": "O que fazer em Gramado",
+            "category_id": cat["id"],
+            "keywords": ["gramado", "roteiro"],
+        },
+        headers={"Authorization": "Bearer teste123"},
+    ).json()
+    assert p2["related_post"] is not None
+    assert p2["related_post"]["id"] == p1["id"]
+    assert p2["related_post"]["slug"] == "gramado-no-inverno"
+
+    relink = client.post("/posts/relink", headers={"Authorization": "Bearer teste123"})
+    assert relink.status_code == 200, relink.text
+    assert isinstance(relink.json()["related"], int)
+
+    relink_denied = client.post("/posts/relink")
+    assert relink_denied.status_code == 401
+
+    for pid in (p1["id"], p2["id"]):
+        client.delete(f"/posts/{pid}", headers={"Authorization": "Bearer teste123"})
+
+
 def test_kit_backfill(mocker):
     import app.services.ai as _ai_mod
 

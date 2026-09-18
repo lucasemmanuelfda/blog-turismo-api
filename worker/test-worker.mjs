@@ -21,6 +21,13 @@ function fakePost(now = new Date().toISOString()) {
     tags: ["Gramado", "Serra Gaúcha"],
     category_id: null,
     keywords: ["gramado"],
+    related_post: {
+      id: 2,
+      title: "Segunda Rota",
+      slug: "segundo-rota",
+      summary: "Continuação do roteiro principal.",
+      cover_image: "https://thumb.wikimedia.org/t3.jpg",
+    },
     kit_recommendations: [
       { name: "Jaqueta corta-vento", note: "pra encarar o vento da serra à noite", query: "jaqueta corta vento" },
       { name: "Mochila de trilha", note: "leve para caminhar nos cânions", query: "mochila de trilha" },
@@ -158,6 +165,8 @@ async function run() {
   check("home 5 posts (4 cards + hero)", (home.match(/<article class="col-md-6 col-lg-4"/g) || []).length === 4);
   check("home ver mais restantes", home.includes("Ver mais posts (2 restantes)"));
   check("home ver mais link next", home.includes('rel="next"') && home.includes(`${SITE}/page/2/`));
+  check("home badge blog relacionado", home.includes("Leia também: Segunda Rota") && home.includes(`/post/segundo-rota/`));
+  check("home sem badge de tag", !home.includes('href="/tag/gramado/'));
 
   // Paginação /page/N/ (renderizada no servidor: crawlável, sem JS)
   const page2Res = await worker.fetch({ url: SITE + "/page/2/" }, {}, {});
@@ -222,6 +231,8 @@ async function run() {
   check("post widget search container", post.includes('id="tpwl-search"'));
   check("post widget tickets container", post.includes('id="tpwl-tickets"'));
   check("post sem aviasales (ids vazios)", !post.includes("aviasales.com/?marker="));
+  check("post leia tambem", post.includes('aria-label="Leia também"') && post.includes("Segunda Rota") && post.includes("/post/segundo-rota/"));
+  check("post sem badge de tag", !post.includes('href="/tag/gramado/'));
 
   // bloco de afiliados de viagem com IDs injetados
   TRAVEL_AFFILIATES.travelpayouts = "123456";

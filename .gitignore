@@ -9,3 +9,6 @@ test_memory.json
 trends-cache.json
 blog-memory.json
 .wrangler/
+gha-creds-*.json
+PageSpeed Insights.html
+PageSpeed Insights_files/

@@ -567,20 +567,24 @@ function slugTag(t) {
   return encodeURIComponent(String(t).toLowerCase().replace(/\s+/g, "-"));
 }
 
+function relatedBadge(post, badgeClass = "text-bg-secondary") {
+  const r = post && post.related_post;
+  if (!r) return "";
+  return `<a class="badge rounded-pill ${badgeClass} text-decoration-none" href="/post/${esc(r.slug)}/" title="Leia também">Leia também: ${esc(r.title)}</a>`;
+}
+
 function cardsHtml(posts) {
   return posts.map((p) => {
     const img = p.cover_image
       ? `<a class="d-block ratio ratio-16x9" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100" loading="lazy" src="${esc(thumb(cleanImageUrl(p.cover_image)))}" alt="" role="presentation" /></a>`
       : "";
-    const tag = (p.tags && p.tags[0])
-      ? `<a class="badge rounded-pill text-bg-secondary text-decoration-none" href="/tag/${esc(slugTag(p.tags[0]))}/">${esc(p.tags[0])}</a>`
-      : "";
+    const rel = relatedBadge(p);
     const date = p.published_at ? `<time datetime="${esc(p.published_at)}">${new Date(p.published_at).toLocaleDateString("pt-BR")}</time>` : "";
     return `<article class="col-md-6 col-lg-4">
       <div class="card post-card h-100 border-0 shadow-sm">
         ${img}
         <div class="card-body d-flex flex-column">
-          <div class="d-flex flex-wrap align-items-center gap-2 small text-body-secondary mb-2">${tag ? `<span>${tag}</span>` : ""}${date ? `<span>${date}</span>` : ""}</div>
+          <div class="d-flex flex-wrap align-items-center gap-2 small text-body-secondary mb-2">${rel ? `<span>${rel}</span>` : ""}${date ? `<span>${date}</span>` : ""}</div>
           <h2 class="h5 card-title mb-2"><a class="text-decoration-none link-body-emphasis" href="/post/${esc(p.slug)}/">${esc(p.title)}</a></h2>
           <p class="card-text text-body-secondary flex-grow-1 small">${esc(p.summary || "")}</p>
           <a class="btn btn-sm btn-outline-primary align-self-start mt-2" href="/post/${esc(p.slug)}/">Ler artigo completo →</a>
@@ -597,7 +601,7 @@ function heroHtml(p) {
       <a class="d-block h-100" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100 h-100" loading="eager" fetchpriority="high" src="${esc(thumb(cleanImageUrl(p.cover_image)))}" alt="" role="presentation" /></a>
     </div>
     <div class="col-md-6 d-flex flex-column justify-content-center p-4 p-md-5">
-      <span class="badge rounded-pill text-bg-primary align-self-start mb-3">${esc((p.tags && p.tags[0]) || "Turismo")}</span>
+      ${relatedBadge(p, "text-bg-primary align-self-start mb-3") || `<span class="badge rounded-pill text-bg-primary align-self-start mb-3">Turismo</span>`}
       <h2 class="card-title h1 mb-3"><a class="text-decoration-none link-body-emphasis" href="/post/${esc(p.slug)}/">${esc(p.title)}</a></h2>
       <p class="card-text text-body-secondary mb-4">${esc(p.summary || "")}</p>
       <a class="btn btn-dark align-self-start" href="/post/${esc(p.slug)}/">Ler artigo completo</a>
@@ -777,6 +781,25 @@ function travelHtml(post, travelMarker) {
 </section>`;
 }
 
+function relatedHtml(post) {
+  const r = post && post.related_post;
+  if (!r) return "";
+  const cover = r.cover_image
+    ? `<img class="cover-img w-100" loading="lazy" src="${esc(thumb(cleanImageUrl(r.cover_image)))}" alt="" role="presentation" />`
+    : "";
+  return `<section class="related mt-5" aria-label="Leia também">
+  <h2 class="h4 mb-3">Leia também</h2>
+  <div class="card post-card border-0 shadow-sm overflow-hidden">
+    ${cover}
+    <div class="card-body">
+      <h3 class="h6 mb-2"><a class="text-decoration-none link-body-emphasis" href="/post/${esc(r.slug)}/">${esc(r.title)}</a></h3>
+      ${r.summary ? `<p class="card-text text-body-secondary small mb-0">${esc(r.summary)}</p>` : ""}
+      <a class="btn btn-sm btn-outline-primary mt-3" href="/post/${esc(r.slug)}/">Ler artigo completo</a>
+    </div>
+  </div>
+</section>`;
+}
+
 async function postPage(request, origin, slug, travelMarker) {
   const post = await fetchPost(slug);
   if (!post) {
@@ -794,10 +817,7 @@ async function postPage(request, origin, slug, travelMarker) {
   const readTime = post.content
     ? Math.max(1, Math.round(post.content.split(/\s+/).length / 200))
     : null;
-  const tags = (post.tags || []).map((tag) => {
-    const t = String(tag).trim();
-    return `<a class="badge rounded-pill text-bg-secondary text-decoration-none" href="/tag/${esc(slugTag(t))}/">${esc(t)}</a>`;
-  }).join("");
+  const tags = relatedBadge(post);
   const toc = [];
   const content = mdToHtml(post.content, toc);
   const tocHtml = toc.length >= 2
@@ -820,6 +840,7 @@ async function postPage(request, origin, slug, travelMarker) {
         ${tocHtml ? `<div class="col-lg-9 content">${content}</div>${tocHtml}` : `<div class="col-lg-12 content">${content}</div>`}
       </div>
       ${kitHtml(post)}
+      ${relatedHtml(post)}
       ${travelHtml(post, travelMarker)}
     </div>
   </div>

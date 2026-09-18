@@ -49,6 +49,15 @@ def list_posts(
     return crud.list_posts(db, status=status_f, category=category, limit=limit, offset=offset)
 
 
+@router.post("/relink", response_model=dict)
+def relink_posts(
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+):
+    """Recalcula aponte para o blog relacionado em todos os posts já criados."""
+    return {"related": crud.backfill_related_posts(db)}
+
+
 @router.get("/{slug_or_id}", response_model=schemas.PostRead)
 def get_post(slug_or_id: str, db: Session = Depends(get_db)):
     if slug_or_id.isdigit():
