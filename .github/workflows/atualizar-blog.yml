@@ -87,7 +87,7 @@ jobs:
             fi
             echo "Google Indexing $slug -> HTTP $code"
             count=$((count+1))
-            [ "$count" -ge 200 ] && { echo "Limite de 200 URLs atingido."; exit 0; }
+            if [ "$count" -ge 200 ]; then echo "Limite de 200 URLs atingido."; exit 0; fi
           done
 
       - uses: actions/setup-node@v4
