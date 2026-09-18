@@ -46,11 +46,10 @@ const DRIVE_SRC = "https://emrld.ltd/NTc0Nzcw.js?t=574770";
 export const WIDGET_INLINE = `(function () {
   var script = document.createElement("script");
   script.async = 1;
-  script.type = "module";
   script.src = "https://tpemd.com/wl_web/main.js?wl_id=22236";
   document.head.appendChild(script);
 })();`;
-export const WIDGET_HASH = "sha256-nx/OTx4+RN+jKDTGnHFEMQ4VA0/xf0BabOwl4f+oyd8=";
+export const WIDGET_HASH = "sha256-2KxfCqeM26vFryxBSewj8QwVZtLCG3RALjNo+ECDEWM=";
 
 // Alternância manual de tema claro/escuro. Script inline com hash no CSP (como o
 // widget). Sem JS, o CSS segue a preferência do sistema; com JS, data-theme vence.
