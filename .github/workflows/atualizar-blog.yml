@@ -55,7 +55,7 @@ jobs:
 
       - name: Autenticar no Google (Indexing API)
         id: google-auth
-        if: ${{ secrets.GOOGLE_CREDENTIALS != '' && (github.event_name != 'workflow_dispatch' || inputs.content) }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.content }}
         uses: google-github-actions/auth@v3
         with:
           credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
