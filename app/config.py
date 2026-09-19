@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     port: int = 8000
 
     admin_key: str = ""
-    # Nome de usuário do painel /admin (senha vem do banco, ver app/routers/auth.py).
+    # Nome de usuário do painel (rota obscura no worker, ver worker/worker.js).
     admin_username: str = "admin"
-    # Hash bcrypt da senha do painel /admin, usado só como fallback quando ainda
+    # Hash bcrypt da senha do painel admin, usado só como fallback quando ainda
     # não há senha salva no banco; se vazio, aceita o próprio ADMIN_KEY (legado).
     admin_password_hash: str = ""
     # Duração da sessão do painel admin (em horas); o token expirado exige novo login

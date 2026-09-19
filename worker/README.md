@@ -11,11 +11,13 @@ O que ele faz:
 | `/` | Página inicial com cards dos posts publicados + JSON-LD `Blog` + Open Graph |
 | `/post/<slug>/` | Artigo completo renderizado no servidor (HTML puro) + JSON-LD `BlogPosting` + canonical + Open Graph |
 | `/tag/<tag>/` | Lista de posts de uma tag |
-| `/admin` | Painel admin: login com a senha `ADMIN_KEY`; gera rascunhos, publica, regenera kit/imagens e exclui posts |
+| `/painel-interno-9f3k7q2x` | Painel admin (rota não divulgada): login com a senha `ADMIN_KEY`; gera rascunhos, publica, regenera kit/imagens e exclui posts |
 | `/robots.txt` | Permite todos os bots (`User-agent: *`) e aponta o `Sitemap` |
 | `/sitemap.xml` | Sitemap dinâmico com todos os posts publicados |
 
-O painel em `/admin` troca a senha por um **token de sessão curto** emitido pela
+O painel vive em `/painel-interno-9f3k7q2x` (obscuro de propósito; `/admin` e afins
+respondem 404 e o site público não linka o painel). Ele troca a senha por um
+**token de sessão curto** emitido pela
 API (`POST /auth/login`, cookie `admin_token` HttpOnly). As ações são
 formulários SSR (sem JS): **Gerar artigo**, **Publicar**, **Imagens**,
 **Kit** e **Excluir**. Páginas admin são `noindex`.

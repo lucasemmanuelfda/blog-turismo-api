@@ -1,6 +1,6 @@
 // Harness de teste local do Worker (Node >= 24). Sem dependências.
 // Roda com: node worker/test-worker.mjs  (na raiz do repo)
-import worker, { TRAVEL_AFFILIATES, WIDGET_INLINE, WIDGET_HASH, THEME_INLINE, THEME_HASH } from "./worker.js";
+import worker, { ADMIN_ROOT, TRAVEL_AFFILIATES, WIDGET_INLINE, WIDGET_HASH, THEME_INLINE, THEME_HASH } from "./worker.js";
 
 const SITE = "https://exemplo.workers.dev";
 
@@ -316,10 +316,13 @@ async function run() {
   check("privacidade LGPD", priv.includes("LGPD"));
   check("privacidade afiliado", priv.includes("afiliado"));
 
-  // Painel admin
-  const adminNoCookie = await worker.fetch(new Request(SITE + "/admin"), {}, {});
+  // Painel admin (rota obscura; a antiga /admin deve responder 404)
+  const oldAdmin = await worker.fetch(new Request(SITE + "/admin"), {}, {});
+  check("admin antigo 404", oldAdmin.status === 404);
+
+  const adminNoCookie = await worker.fetch(new Request(SITE + ADMIN_ROOT), {}, {});
   const adminPage = await adminNoCookie.text();
-  check("admin login sem sessao", adminPage.includes('action="/admin/login"'));
+  check("admin login sem sessao", adminPage.includes(`action="${ADMIN_ROOT}/login"`));
   check("admin noindex", adminPage.includes('content="noindex, nofollow"'));
   check("admin login campo usuario", adminPage.includes('name="username"'));
   check("admin sem drive", !adminPage.includes("emrld.ltd"));
@@ -328,7 +331,7 @@ async function run() {
   check("admin x-robots-tag", (adminNoCookie.headers.get("X-Robots-Tag") || "").includes("noindex"));
 
   const loginRes = await worker.fetch(
-    new Request(SITE + "/admin/login", {
+    new Request(SITE + ADMIN_ROOT + "/login", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: "password=teste123",
@@ -342,7 +345,7 @@ async function run() {
   check("admin cookie sessao", setCookie.includes("admin_token=") && setCookie.includes("HttpOnly"));
 
   const dashRes = await worker.fetch(
-    new Request(SITE + "/admin", { headers: { Cookie: "admin_token=9999999999.abc" } }),
+    new Request(SITE + ADMIN_ROOT, { headers: { Cookie: "admin_token=9999999999.abc" } }),
     {},
     {}
   );
@@ -350,10 +353,10 @@ async function run() {
   check("admin dashboard gerar", dash.includes("Gerar artigo"));
   check("admin dashboard status", dash.includes("Rascunhos") && dash.includes("Agendados") && dash.includes("Publicados"));
   check("admin mostra post", dash.includes("Roteiro de 3 Dias em Gramado"));
-  check("admin dashboard trocar senha", dash.includes("Trocar senha") && dash.includes('action="/admin/senha"'));
+  check("admin dashboard trocar senha", dash.includes("Trocar senha") && dash.includes(`action="${ADMIN_ROOT}/senha"`));
 
   const pubRes = await worker.fetch(
-    new Request(SITE + "/admin/publish", {
+    new Request(SITE + ADMIN_ROOT + "/publish", {
       method: "POST",
       headers: { Cookie: "admin_token=9999999999.abc", "content-type": "application/x-www-form-urlencoded" },
       body: "id=1",
@@ -365,7 +368,7 @@ async function run() {
   check("admin publicar usa token", lastAdminAuth === "Bearer 9999999999.abc");
 
   const senhaRes = await worker.fetch(
-    new Request(SITE + "/admin/senha", {
+    new Request(SITE + ADMIN_ROOT + "/senha", {
       method: "POST",
       headers: { Cookie: "admin_token=9999999999.abc", "content-type": "application/x-www-form-urlencoded" },
       body: "current_password=atual&new_password=novasenha&confirm_password=novasenha",
@@ -378,7 +381,7 @@ async function run() {
   check("admin trocar senha mensagem", (senhaRes.headers.get("Location") || "").includes("msg="));
 
   const senhaErroRes = await worker.fetch(
-    new Request(SITE + "/admin/senha", {
+    new Request(SITE + ADMIN_ROOT + "/senha", {
       method: "POST",
       headers: { Cookie: "admin_token=9999999999.abc", "content-type": "application/x-www-form-urlencoded" },
       body: "current_password=atual&new_password=novasenha&confirm_password=diferente",
@@ -388,7 +391,7 @@ async function run() {
   );
   check("admin trocar senha confere confirmacao", (senhaErroRes.headers.get("Location") || "").includes("erro="));
 
-  const logoutRes = await worker.fetch(new Request(SITE + "/admin/logout", { method: "POST" }), {}, {});
+  const logoutRes = await worker.fetch(new Request(SITE + ADMIN_ROOT + "/logout", { method: "POST" }), {}, {});
   check("admin logout 302", logoutRes.status === 302);
 
   process.exit(failures ? 1 : 0);

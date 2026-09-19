@@ -6,7 +6,8 @@
  * JavaScript para ler o conteúdo.
  * Layout (CSS próprio inline, sem CDN): navbar, cards, dark mode por preferência do sistema.
  *
- * Painel admin em /admin: login com a senha ADMIN_KEY (trocada por token curto na API),
+ * Painel admin em /painel-interno-9f3k7q2x (rota não divulgada; /admin e afins
+ * respondem 404): login com a senha ADMIN_KEY (trocada por token curto na API),
  * gerar artigos, publicar, regenerar kit/imagens e excluir.
  *
  * Deploy: `wrangler deploy` (ou via GitHub Actions em .github/workflows/atualizar-blog.yml).
@@ -14,9 +15,11 @@
 
 const API_BASE_URL = "https://blog-turismo-api.onrender.com";
 
-// Sessão do painel admin: nome do cookie + prefixo de rota das ações
+// Sessão do painel admin: nome do cookie + prefixo de rota das ações.
+// Rota intencionalmente obscura — o painel não é linkado no site público e as
+// rotas comuns (/admin, /painel, /dashboard) respondem 404.
 const ADMIN_COOKIE = "admin_token";
-const ADMIN_ROOT = "/admin";
+export const ADMIN_ROOT = "/painel-interno-9f3k7q2x";
 
 const DEFAULT_TITLE = "Blog Turismo";
 const DEFAULT_DESC =
@@ -433,7 +436,7 @@ ${nav}
 ${t.body}
 </main>
 <footer class="footer text-center text-body-secondary small py-4 px-3">
-  <a class="link-body-emphasis" href="/">Blog Turismo</a> · <a class="link-secondary" href="/sobre">Sobre</a> · <a class="link-secondary" href="/privacidade">Privacidade</a> · Conteúdo informativo gerado automaticamente todos os dias · <a class="link-secondary" href="${ADMIN_ROOT}">Painel</a>
+  <a class="link-body-emphasis" href="/">Blog Turismo</a> · <a class="link-secondary" href="/sobre">Sobre</a> · <a class="link-secondary" href="/privacidade">Privacidade</a> · Conteúdo informativo gerado automaticamente todos os dias
 </footer>
 </body>
 </html>`;
@@ -1163,6 +1166,15 @@ export default {
     const path = url.pathname;
     const origin = url.origin;
     const method = (request.method || "GET").toUpperCase();
+
+    // Rotas antigas/óbvias de painel não existem: 404 para não revelar o painel.
+    if (path === "/admin" || path === "/admin/" || path === "/painel" ||
+        path === "/painel/" || path === "/dashboard" || path === "/dashboard/") {
+      return new Response("Não encontrado", {
+        status: 404,
+        headers: secured({ "Content-Type": "text/plain; charset=utf-8" }),
+      });
+    }
 
     // Painel admin (login + ações por formulário)
     if (path === ADMIN_ROOT || path === ADMIN_ROOT + "/" || path.startsWith(ADMIN_ROOT + "/")) {
