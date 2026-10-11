@@ -208,10 +208,10 @@ def cmd_refresh_all_images():
                 content = add_attribution(content, urls)
                 post.content = content
                 post.cover_image = urls[0]
+                db.commit()
                 print(f"  [OK] Novas fotos aplicadas. Capa: {urls[0]}")
             else:
                 print(f"  [AVISO] Nenhuma foto encontrada para '{topic}'.")
-        db.commit()
     print("Atualização concluída com sucesso!")
 
 

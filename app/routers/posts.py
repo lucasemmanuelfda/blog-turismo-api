@@ -89,11 +89,20 @@ def publish_post(
 
 @router.post("/refresh-all-images", response_model=dict)
 def refresh_all_images(
+    limit: int = 200,
+    offset: int = 0,
     db: Session = Depends(get_db),
     _: None = Depends(require_admin),
 ):
     """Atualiza as imagens e atribuição com hiperlink de todos os posts publicados."""
-    posts = db.scalars(select(models.Post).where(models.Post.status == "published")).all()
+    query = (
+        select(models.Post)
+        .where(models.Post.status == "published")
+        .order_by(models.Post.id.asc())
+        .offset(offset)
+        .limit(limit)
+    )
+    posts = db.scalars(query).all()
     updated = 0
     for post in posts:
         try:
@@ -106,11 +115,12 @@ def refresh_all_images(
                 content = add_attribution(content, urls)
                 post.content = content
                 post.cover_image = urls[0]
+                db.commit()
                 updated += 1
         except Exception as exc:
+            db.rollback()
             logger.warning(f"Erro ao atualizar imagens do post {post.id}: {exc}")
-    db.commit()
-    return {"total": len(posts), "updated": updated}
+    return {"total": len(posts), "updated": updated, "offset": offset, "limit": limit}
 
 
 @router.post("/{post_id}/refresh-images", response_model=schemas.PostRead)
