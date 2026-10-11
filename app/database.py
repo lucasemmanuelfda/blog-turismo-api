@@ -20,16 +20,22 @@ class Base(DeclarativeBase):
 
 
 def migrate():
-    """Aplica colunas novas que create_all não adiciona em tabelas existentes."""
-    if "posts" not in inspect(engine).get_table_names():
+    """Aplica colunas e índices novos que create_all não adiciona em tabelas existentes."""
+    inspector = inspect(engine)
+    if "posts" not in inspector.get_table_names():
         return
-    columns = {c["name"] for c in inspect(engine).get_columns("posts")}
-    if "kit_recommendations" not in columns:
-        with engine.begin() as conn:
+    columns = {c["name"] for c in inspector.get_columns("posts")}
+    with engine.begin() as conn:
+        if "kit_recommendations" not in columns:
             conn.execute(text("ALTER TABLE posts ADD COLUMN kit_recommendations TEXT NOT NULL DEFAULT '[]'"))
-    if "related_post_id" not in columns:
-        with engine.begin() as conn:
+        if "related_post_id" not in columns:
             conn.execute(text("ALTER TABLE posts ADD COLUMN related_post_id INTEGER REFERENCES posts(id)"))
+        
+        indexes = {idx["name"] for idx in inspector.get_indexes("posts")}
+        for col in ("scheduled_at", "category_id", "related_post_id", "created_at"):
+            idx_name = f"ix_posts_{col}"
+            if idx_name not in indexes:
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON posts ({col})"))
 
 
 def get_db():

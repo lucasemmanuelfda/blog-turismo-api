@@ -58,9 +58,20 @@ def _picsum(keyword: str, variant: int) -> str:
     return f"https://picsum.photos/seed/{quote(keyword)}-{variant}/{WIDTH}/{HEIGHT}"
 
 
+def _extract_clean_keyword(topic: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9\u00C0-\u00FF\s]", "", (topic or "").strip().lower())
+    words = [w for w in cleaned.split() if len(w) > 2]
+    if not words:
+        return "travel"
+    meaningful = [w for w in words if w not in ("guia", "roteiro", "dicas", "melhor", "como", "viagem", "destinos", "sobre")]
+    if meaningful:
+        return meaningful[0]
+    return words[0]
+
+
 def image_urls(topic: str, n: int = 3) -> list[str]:
     """n imagens 16:9 por tema (nunca placeholder/margem sólida)."""
-    keyword = (topic.strip() or "travel").split()[0].lower() or "travel"
+    keyword = _extract_clean_keyword(topic)
     if not get_settings().validate_images:
         return [_picsum(keyword, i) for i in range(1, n + 1)]
     urls = _wikimedia_search(keyword, n)

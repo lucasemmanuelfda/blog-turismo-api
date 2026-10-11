@@ -9,6 +9,8 @@ test_memory.json
 trends-cache.json
 blog-memory.json
 .wrangler/
+supabase/.temp/
+supabase/.branches/
 gha-creds-*.json
 PageSpeed Insights.html
 PageSpeed Insights_files/

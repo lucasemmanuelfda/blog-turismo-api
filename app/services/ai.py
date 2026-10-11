@@ -239,25 +239,43 @@ catálogo de atrações nem tom publicitário.
         delay = 4
         for attempt in range(attempts):
             try:
-                return client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=0.7,
-                    response_format={"type": "json_object"},
-                )
+                try:
+                    return client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        temperature=0.7,
+                        response_format={"type": "json_object"},
+                    )
+                except Exception as req_err:
+                    err_msg = str(req_err).lower()
+                    if "response_format" in err_msg or "json_object" in err_msg or "400" in err_msg:
+                        # Fallback para modelos que não suportam o parâmetro response_format
+                        return client.chat.completions.create(
+                            model=model,
+                            messages=[
+                                {"role": "system", "content": system_prompt + "\nImportante: responda estritamente em formato JSON válido."},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            temperature=0.7,
+                        )
+                    raise
             except Exception:
                 if attempt == attempts - 1:
                     raise
                 time.sleep(delay * (attempt + 1))
 
     def _parse_json(self, raw: str) -> dict[str, Any]:
+        text = raw.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+            text = re.sub(r"\s*```$", "", text)
         try:
-            data = json.loads(raw)
+            data = json.loads(text)
         except json.JSONDecodeError:
-            match = re.search(r"\{.*\}", raw, re.DOTALL)
+            match = re.search(r"\{.*\}", text, re.DOTALL)
             if not match:
                 raise ValueError("Resposta da IA não continha JSON válido")
             data = json.loads(match.group(0))
@@ -287,10 +305,14 @@ catálogo de atrações nem tom publicitário.
     @staticmethod
     def _parse_string_list(raw: str) -> list[str]:
         """Extrai uma lista de strings de uma resposta JSON (array ou {"topics": [...]})."""
+        text = raw.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+            text = re.sub(r"\s*```$", "", text)
         try:
-            data = json.loads(raw)
+            data = json.loads(text)
         except json.JSONDecodeError:
-            match = re.search(r"\[.*\]", raw, re.DOTALL)
+            match = re.search(r"\[.*\]", text, re.DOTALL)
             if not match:
                 return []
             try:

@@ -41,7 +41,7 @@ class Post(Base):
 
     # draft | scheduled | published
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
-    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     keywords: Mapped[str] = mapped_column(Text, default="")  # JSON list
@@ -52,19 +52,19 @@ class Post(Base):
     meta_description: Mapped[str] = mapped_column(Text, default="")
 
     is_ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, onupdate=utcnow
     )
 
     category_id: Mapped[int | None] = mapped_column(
-        ForeignKey("categories.id"), nullable=True
+        ForeignKey("categories.id"), nullable=True, index=True
     )
     category: Mapped[Category | None] = relationship(back_populates="posts")
 
     # Blog relacionado (tema correlacionado) — substitui as tags na interface.
     related_post_id: Mapped[int | None] = mapped_column(
-        ForeignKey("posts.id"), nullable=True
+        ForeignKey("posts.id"), nullable=True, index=True
     )
     related_post: Mapped["Post | None"] = relationship(
         remote_side="Post.id", foreign_keys=[related_post_id]

@@ -473,9 +473,28 @@ function postJsonLd(a) {
 
 // ---------- Acesso à API ----------
 
+async function fetchWithRetry(url, options = {}, retries = 2) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if ([502, 503, 504].includes(res.status) && i < retries) {
+        await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (i < retries) {
+        await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 async function fetchPosts(limit = 30, offset = 0) {
   const u = `${API_BASE_URL}/posts?status=published&limit=${limit}&offset=${offset}`;
-  const res = await fetch(u, { headers: { Accept: "application/json" } });
+  const res = await fetchWithRetry(u, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error("API " + res.status);
   return res.json();
 }
@@ -494,7 +513,7 @@ async function fetchAllPosts() {
 
 async function fetchPost(slug) {
   const u = `${API_BASE_URL}/posts/${encodeURIComponent(slug)}`;
-  const res = await fetch(u, { headers: { Accept: "application/json" } });
+  const res = await fetchWithRetry(u, { headers: { Accept: "application/json" } });
   if (!res.ok) return null;
   return res.json();
 }
@@ -894,6 +913,7 @@ async function tagPage(request, origin, tag) {
       canonical: `${origin}/tag/${esc(slugTag(pretty))}/`,
       origin,
       body,
+      robots: filtered.length ? "index, follow" : "noindex, follow",
       jsonld: blogJsonLd(),
     }),
     { headers: secured({ "Content-Type": "text/html; charset=utf-8", ...PUB_CACHE }) }
@@ -1160,21 +1180,15 @@ function handleSlugUrl(origin, path) {
   return decodeURIComponent(slug.split("/")[0]);
 }
 
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-    const origin = url.origin;
-    const method = (request.method || "GET").toUpperCase();
-
-    // Rotas antigas/óbvias de painel não existem: 404 para não revelar o painel.
-    if (path === "/admin" || path === "/admin/" || path === "/painel" ||
-        path === "/painel/" || path === "/dashboard" || path === "/dashboard/") {
-      return new Response("Não encontrado", {
-        status: 404,
-        headers: secured({ "Content-Type": "text/plain; charset=utf-8" }),
-      });
-    }
+async function handleRoute(request, env, ctx, url, path, origin, method) {
+  // Rotas antigas/óbvias de painel não existem: 404 para não revelar o painel.
+  if (path === "/admin" || path === "/admin/" || path === "/painel" ||
+      path === "/painel/" || path === "/dashboard" || path === "/dashboard/") {
+    return new Response("Não encontrado", {
+      status: 404,
+      headers: secured({ "Content-Type": "text/plain; charset=utf-8" }),
+    });
+  }
 
     // Painel admin (login + ações por formulário)
     if (path === ADMIN_ROOT || path === ADMIN_ROOT + "/" || path.startsWith(ADMIN_ROOT + "/")) {
@@ -1319,6 +1333,39 @@ ${paginationLinks}${links}${tagLinks}</urlset>`;
 
     // Home (default)
     return home(request, origin);
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const origin = url.origin;
+    const method = (request.method || "GET").toUpperCase();
+
+    // Cache Edge da Cloudflare para rotas públicas GET
+    const isAdmin = path === ADMIN_ROOT || path.startsWith(ADMIN_ROOT + "/");
+    const isCacheable = method === "GET" && !isAdmin && !path.startsWith("/admin");
+    const edgeCache = (typeof caches !== "undefined" && caches && caches.default) ? caches.default : null;
+    let cacheKey = null;
+
+    if (isCacheable && edgeCache) {
+      try {
+        cacheKey = new Request(url.toString(), request);
+        const cached = await edgeCache.match(cacheKey);
+        if (cached) {
+          return cached;
+        }
+      } catch (_) {}
+    }
+
+    const res = await handleRoute(request, env, ctx, url, path, origin, method);
+
+    if (isCacheable && edgeCache && cacheKey && res && res.status === 200) {
+      try {
+        ctx?.waitUntil?.(edgeCache.put(cacheKey, res.clone()));
+      } catch (_) {}
+    }
+    return res;
   },
 
   async scheduled(event, env, ctx) {
