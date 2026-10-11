@@ -99,7 +99,8 @@ def _extract_clean_keyword(topic: str, tags: list[str] | None = None) -> str:
     """Extrai o destino geográfico real priorizando tags e palavras-chave específicas."""
     if tags:
         for tag in tags:
-            cleaned_tag = re.sub(r"[^a-zA-Z0-9\u00C0-\u00FF\s]", "", str(tag).strip())
+            tag_str = re.sub(r"[-_]+", " ", str(tag).strip())
+            cleaned_tag = re.sub(r"[^a-zA-Z0-9\u00C0-\u00FF\s]", "", tag_str).strip()
             if cleaned_tag and len(cleaned_tag) > 2 and cleaned_tag.lower() not in _STOPWORDS_DESTINO:
                 return cleaned_tag
 
