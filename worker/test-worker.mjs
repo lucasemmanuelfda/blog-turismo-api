@@ -140,23 +140,22 @@ async function run() {
   check("home cache-control", (homeRes.headers.get("Cache-Control") || "").includes("max-age=300"));
   check("home sem analytics (token vazio)", !home.includes("cloudflareinsights"));
   check("home drive script", home.includes('src="https://emrld.ltd/NTc0Nzcw.js?t=574770"'));
-  check("home widget loader", home.includes('script.src = "https://tpemd.com/wl_web/main.js?wl_id=22236"'));
+  check("home sem widget busca voos", !home.includes("tpemd.com"));
   const homeCsp = homeRes.headers.get("Content-Security-Policy") || "";
   check("csp baseline", homeCsp.includes("default-src 'self'"));
   check("csp sem cloudflare (token vazio)", !homeCsp.includes("cloudflareinsights"));
   check("csp permite drive", homeCsp.includes("script-src 'self' https://emrld.ltd"));
   check("csp connect drive", homeCsp.includes("connect-src 'self' https://emrld.ltd"));
-  check("csp permite widget tpemd", homeCsp.includes("script-src 'self' https://emrld.ltd https://tpemd.com"));
-  check("csp widget hash", homeCsp.includes(`'${WIDGET_HASH}'`));
-  check("csp connect tpemd", homeCsp.includes("connect-src 'self' https://emrld.ltd https://tpemd.com"));
+  check("csp sem widget tpemd", !homeCsp.includes("https://tpemd.com"));
   check("csp tema hash", homeCsp.includes(`'${THEME_HASH}'`));
   check("home botao tema", home.includes('<button id="tema"'));
   check("home script tema", home.includes('getElementById("tema")'));
 
-  // guarda contra drift: o hash fixado no CSP precisa bater com o conteúdo do loader
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(WIDGET_INLINE));
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(digest)));
-  check("csp widget hash bate com inline", `sha256-${b64}` === WIDGET_HASH);
+  if (WIDGET_INLINE) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(WIDGET_INLINE));
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(digest)));
+    check("csp widget hash bate com inline", `sha256-${b64}` === WIDGET_HASH);
+  }
   const tDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(THEME_INLINE));
   const tB64 = btoa(String.fromCharCode(...new Uint8Array(tDigest)));
   check("csp tema hash bate com inline", `sha256-${tB64}` === THEME_HASH);
@@ -227,30 +226,25 @@ async function run() {
   check("post kit disclosure", post.includes("afiliado da Amazon"));
   check("post kit cta", post.includes("Ver na Amazon"));
   check("post kit sponsored", post.includes('rel="sponsored nofollow noopener"'));
-  check("post bloco viagem com widget (ids vazios)", post.includes("Planeje a viagem"));
-  check("post widget search container", post.includes('id="tpwl-search"'));
-  check("post widget tickets container", post.includes('id="tpwl-tickets"'));
-  check("post sem aviasales (ids vazios)", !post.includes("aviasales.com/?marker="));
+  check("post sem busca voos container", !post.includes('id="tpwl-search"'));
+  check("post sem aviasales", !post.includes("aviasales.com"));
+  check("post sem seguros promo", !post.includes("segurospromo.com.br") && !post.includes("Cotar Seguro com Desconto"));
   check("post leia tambem", post.includes('aria-label="Leia também"') && post.includes("Segunda Rota") && post.includes("/post/segundo-rota/"));
   check("post sem badge de tag", !post.includes('href="/tag/gramado/'));
 
-  // bloco de afiliados de viagem com IDs injetados
-  TRAVEL_AFFILIATES.travelpayouts = "123456";
+  // bloco de afiliados: booking pode ser exibido se configurado, mas aviasales e segurospromo nunca
   TRAVEL_AFFILIATES.booking = "7890";
   const postAff = await (await worker.fetch({ url: SITE + "/post/roteiro-de-3-dias-em-gramado/" }, {}, {})).text();
-  TRAVEL_AFFILIATES.travelpayouts = "";
   TRAVEL_AFFILIATES.booking = "";
-  check("viagem aviasales marker", postAff.includes("aviasales.com/?marker=123456"));
-  check("viagem aviasales subid", postAff.includes("subid=roteiro-de-3-dias-em-gramado"));
   check("viagem booking aid", postAff.includes("booking.com/searchresults.html?aid=7890"));
   check("viagem sponsored", postAff.includes('rel="sponsored nofollow noopener"'));
+  check("viagem sem aviasales mesmo com booking", !postAff.includes("aviasales.com"));
 
-  // marker de produção vem do env (secret do Cloudflare), não do código
+  // marker de produção vem do env (secret do Cloudflare), mas aviasales e seguro não são injetados
   const postEnv = await (await worker.fetch({ url: SITE + "/post/roteiro-de-3-dias-em-gramado/" }, { TRAVELPAYOUTS_MARKER: "778478" }, {})).text();
-  check("viagem env marker", postEnv.includes("aviasales.com/?marker=778478"));
-  check("viagem env sem booking", !postEnv.includes("booking.com"));
+  check("viagem env sem aviasales", !postEnv.includes("aviasales.com"));
+  check("viagem env sem seguros promo", !postEnv.includes("segurospromo.com.br"));
   check("post tabela markdown", post.includes('class="table-responsive') && post.includes("<td>Lago Negro</td>"));
-  check("post seguro viagem", post.includes("Seguro Viagem") && post.includes("segurospromo.com.br"));
   check("post whatsapp share", post.includes("Compartilhar no WhatsApp") && post.includes("api.whatsapp.com/send"));
 
   const rssRes = await worker.fetch({ url: SITE + "/feed.xml" }, {}, {});

@@ -84,7 +84,7 @@ OBRIGATÓRIO incluir no Markdown do "content":
 5. SEÇÃO "O QUE LEVAR NA MALA" (H2):
    Cite organicamente os 3 itens do "kit_recommendations" explicando sua utilidade prática no terreno desse destino.
 6. SEÇÃO "SEGURANÇA E SAÚDE" (H2):
-   Oriente sobre cuidados essenciais e mencione a importância de contratar um Seguro Viagem antes de embarcar.
+   Oriente sobre cuidados essenciais com saúde, hidratação, segurança local e documentação.
 7. SEÇÃO "PERGUNTAS FREQUENTES (FAQ)" (H2):
    4 a 5 perguntas frequentes de busca direta no Google com respostas objetivas de 2 a 3 frases (formato ideal para Featured Snippets do Google).
 
@@ -162,7 +162,7 @@ Estrutura obrigatória do artigo:
 7. Tabela de Orçamento Estimado por Perfil (Mochileiro, Conforto, Alto Padrão).
 8. Dicas "Pulo do Gato" (segredos práticos que fazem a diferença).
 9. O que levar na mala (mencionando os itens do kit).
-10. Segurança e Saúde (incluindo orientação sobre Seguro Viagem).
+10. Segurança e Saúde (cuidados locais, hidratação e documentação).
 11. Perguntas Frequentes (FAQ) com 4 a 5 respostas diretas para dúvidas comuns.
 """.strip()
 

@@ -46,13 +46,8 @@ const DRIVE_SRC = "https://emrld.ltd/NTc0Nzcw.js?t=574770";
 // Travelpayouts White Label: metasearch de voos. O loader é inline (hash fixado no CSP
 // abaixo); vazio desliga o script e os containers. O hash cobre o texto exato de
 // WIDGET_INLINE — conferido pelo check "csp widget hash" no test-worker.mjs.
-export const WIDGET_INLINE = `(function () {
-  var script = document.createElement("script");
-  script.async = 1;
-  script.src = "https://tpemd.com/wl_web/main.js?wl_id=22236";
-  document.head.appendChild(script);
-})();`;
-export const WIDGET_HASH = "sha256-2KxfCqeM26vFryxBSewj8QwVZtLCG3RALjNo+ECDEWM=";
+export const WIDGET_INLINE = "";
+export const WIDGET_HASH = "";
 
 // Alternância manual de tema claro/escuro. Script inline com hash no CSP (como o
 // widget). Sem JS, o CSS segue a preferência do sistema; com JS, data-theme vence.
@@ -764,7 +759,7 @@ function privacidadePage(origin) {
 <h2>Análises</h2>
 <p>Podemos usar estatísticas de acesso agregadas e sem cookies para entender quais conteúdos são úteis. Esses dados não identificam você individualmente.</p>
 <h2>Links de afiliado</h2>
-<p>Alguns links levam a lojas e serviços parceiros (como Amazon, Booking.com e Aviasales). Ao comprar ou reservar por eles, o blog pode receber uma comissão <strong>sem nenhum custo adicional para você</strong>. O preço e as condições são os mesmos.</p>
+<p>Alguns links levam a lojas e serviços parceiros (como Amazon e Booking.com). Ao comprar ou reservar por eles, o blog pode receber uma comissão <strong>sem nenhum custo adicional para você</strong>. O preço e as condições são os mesmos.</p>
 <h2>Seus direitos (LGPD)</h2>
 <p>Como não coletamos dados pessoais de visitantes, normalmente não há dados a excluir. Ainda assim, você pode solicitar informações. ${contactLine()}</p>
 <p>Última atualização: ${new Date().toISOString().slice(0, 10)}.</p>`;
@@ -808,26 +803,17 @@ function kitHtml(post) {
 </section>`;
 }
 
-function travelHtml(post, travelMarker) {
-  const marker = String(travelMarker || "").trim() || TRAVEL_AFFILIATES.travelpayouts;
+function travelHtml(post) {
   const booking = TRAVEL_AFFILIATES.booking;
-  if (!marker && !booking && !WIDGET_INLINE) return "";
+  if (!booking) return "";
   const dest = ((post.tags || [])[0] || post.title || "").trim();
   const q = encodeURIComponent(dest);
-  const sub = encodeURIComponent(post.slug || "");
-  const links = [];
-  if (marker) {
-    links.push(`<a class="btn btn-outline-primary" rel="sponsored nofollow noopener" href="https://www.aviasales.com/?marker=${encodeURIComponent(marker)}&subid=${sub}">Buscar voos para ${esc(dest)}</a>`);
-  }
-  if (booking) {
-    links.push(`<a class="btn btn-outline-primary" rel="sponsored nofollow noopener" href="https://www.booking.com/searchresults.html?aid=${encodeURIComponent(booking)}&ss=${q}">Ver hotéis em ${esc(dest)}</a>`);
-  }
   return `<section class="kit mt-5" aria-label="Planeje a viagem">
   <h2 class="h4 mb-1">Planeje a viagem</h2>
   <p class="text-body-secondary small mb-3">Links de parceiros. Reservando por eles, o blog ganha uma pequena comissão sem custo extra para você.</p>
-  ${links.length ? `<div class="d-flex flex-wrap gap-2 mb-4">${links.join("")}</div>` : ""}
-  ${WIDGET_INLINE ? `<div id="tpwl-search" aria-label="Busca de voos"></div>
-  <div id="tpwl-tickets" aria-label="Resultados de voos"></div>` : ""}
+  <div class="d-flex flex-wrap gap-2 mb-4">
+    <a class="btn btn-outline-primary" rel="sponsored nofollow noopener" href="https://www.booking.com/searchresults.html?aid=${encodeURIComponent(booking)}&ss=${q}">Ver hotéis em ${esc(dest)}</a>
+  </div>
 </section>`;
 }
 
@@ -850,26 +836,6 @@ function relatedHtml(post) {
 </section>`;
 }
 
-function insuranceHtml(post, travelMarker) {
-  const marker = String(travelMarker || "").trim() || TRAVEL_AFFILIATES.travelpayouts || "574770";
-  const dest = ((post.tags || [])[0] || post.title || "").trim();
-  const sub = encodeURIComponent(post.slug || "seguro");
-  const insuranceUrl = `https://www.segurospromo.com.br/?marker=${encodeURIComponent(marker)}&subid=${sub}`;
-  return `<section class="kit mt-4" aria-label="Seguro Viagem">
-  <div class="card border-0 shadow-sm p-4" style="background:linear-gradient(135deg,rgba(14,116,144,.08),rgba(109,40,217,.08));border-left:4px solid var(--brand-1)!important">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-      <div>
-        <span class="badge text-bg-primary mb-2">Dica de Viajante</span>
-        <h3 class="h5 mb-1">Vai viajar para ${esc(dest)}? Não viaje sem Seguro Viagem</h3>
-        <p class="small text-body-secondary mb-0">Imprevistos de saúde, atrasos e extravios acontecem. Cote com as melhores seguradoras e garanta até 15% de desconto.</p>
-      </div>
-      <a class="btn btn-primary text-nowrap" rel="sponsored nofollow noopener" target="_blank" href="${insuranceUrl}">
-        Cotar Seguro com Desconto
-      </a>
-    </div>
-  </div>
-</section>`;
-}
 
 function whatsappShareHtml(post, canonical) {
   const shareText = encodeURIComponent(`${post.title} — Veja este roteiro: ${canonical}`);
@@ -924,8 +890,7 @@ async function postPage(request, origin, slug, travelMarker) {
       </div>
       ${kitHtml(post)}
       ${relatedHtml(post)}
-      ${travelHtml(post, travelMarker)}
-      ${insuranceHtml(post, travelMarker)}
+      ${travelHtml(post)}
       ${whatsappShareHtml(post, canonical)}
     </div>
   </div>
@@ -1436,6 +1401,7 @@ export default {
     const method = (request.method || "GET").toUpperCase();
 
     // Cache Edge da Cloudflare para rotas públicas GET
+    const CACHE_VERSION = "v3";
     const isAdmin = path === ADMIN_ROOT || path.startsWith(ADMIN_ROOT + "/");
     const isCacheable = method === "GET" && !isAdmin && !path.startsWith("/admin");
     const edgeCache = (typeof caches !== "undefined" && caches && caches.default) ? caches.default : null;
@@ -1443,7 +1409,9 @@ export default {
 
     if (isCacheable && edgeCache) {
       try {
-        cacheKey = new Request(url.toString(), request);
+        const cacheUrl = new URL(url.toString());
+        cacheUrl.searchParams.set("__cv", CACHE_VERSION);
+        cacheKey = new Request(cacheUrl.toString(), request);
         const cached = await edgeCache.match(cacheKey);
         if (cached) {
           return cached;
