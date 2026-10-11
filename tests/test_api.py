@@ -43,6 +43,10 @@ def test_health():
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json() == {"status": "ok"}
+    r_head = client.head("/health")
+    assert r_head.status_code == 200
+    r_root = client.head("/")
+    assert r_root.status_code == 200
 
 
 def test_post_crud():
