@@ -178,6 +178,19 @@ def cmd_serve(host: str = "127.0.0.1", port: int = 8000, reload: bool = True):
     uvicorn.run("app.main:app", host=host, port=port, reload=reload)
 
 
+def cmd_index_google(credentials: str | None = None, url: str | None = None, limit: int = 195):
+    """Envia URLs do blog para a Google Cloud Indexing API."""
+    import subprocess
+    cmd = [sys.executable, "scripts/index_google.py", "--limit", str(limit)]
+    if credentials:
+        cmd.extend(["--credentials", credentials])
+    if url:
+        cmd.extend(["--url", url])
+    else:
+        cmd.append("--sitemap")
+    subprocess.run(cmd)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Blog Turismo CLI de Gerenciamento")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -212,6 +225,12 @@ def main():
     serve_parser.add_argument("--port", type=int, default=8000)
     serve_parser.add_argument("--no-reload", action="store_true", help="Desabilita auto-reload")
 
+    # index-google
+    index_parser = subparsers.add_parser("index-google", help="Envia URLs para Google Cloud Indexing API")
+    index_parser.add_argument("--credentials", "-c", type=str, default=None, help="Caminho do JSON da Service Account")
+    index_parser.add_argument("--url", "-u", type=str, default=None, help="URL especifica para indexar")
+    index_parser.add_argument("--limit", "-l", type=int, default=195, help="Limite diario (padrao: 195)")
+
     args = parser.parse_args()
 
     if args.command == "test-connections":
@@ -230,6 +249,8 @@ def main():
         cmd_daily(args.count)
     elif args.command == "serve":
         cmd_serve(args.host, args.port, reload=not args.no_reload)
+    elif args.command == "index-google":
+        cmd_index_google(args.credentials, args.url, args.limit)
 
 
 if __name__ == "__main__":

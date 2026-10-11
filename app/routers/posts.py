@@ -42,7 +42,7 @@ def _image_keyword(post: models.Post) -> str:
 def list_posts(
     status_f: str | None = Query(default=None, alias="status"),
     category: str | None = None,
-    limit: int = Query(default=20, ge=1, le=50),
+    limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):

@@ -48,3 +48,9 @@ def test_cli_main_dispatch():
     with patch("sys.argv", ["cli", "stats"]), patch("app.cli.cmd_stats") as mock_stats:
         cli.main()
         mock_stats.assert_called_once()
+
+
+def test_cli_index_google_dispatch():
+    with patch("sys.argv", ["cli", "index-google", "--limit", "10"]), patch("app.cli.cmd_index_google") as mock_index:
+        cli.main()
+        mock_index.assert_called_once_with(None, None, 10)
