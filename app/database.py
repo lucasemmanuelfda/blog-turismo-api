@@ -8,6 +8,10 @@ settings = get_settings()
 # SQLite é usado como fallback para desenvolvimento local.
 # Em produção (Render/Supabase), DATABASE_URL aponta para o PostgreSQL.
 DATABASE_URL = settings.database_url or "sqlite:///./blog.db"
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
