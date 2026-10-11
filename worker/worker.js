@@ -210,6 +210,27 @@ function mdToHtml(md, toc) {
       out.push(`<ol>${items.join("")}</ol>`);
       continue;
     }
+    // Tabela Markdown: linha que inicia e termina com | seguida por separador
+    if (
+      l.trim().startsWith("|") &&
+      l.trim().endsWith("|") &&
+      i + 1 < lines.length &&
+      /^\|?(\s*:?-+:?\s*\|)+\s*$/.test(lines[i + 1].trim())
+    ) {
+      const headerLine = lines[i];
+      const headers = headerLine.split("|").slice(1, -1).map((c) => inlineSafe(c.trim()));
+      i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|")) {
+        const cells = lines[i].split("|").slice(1, -1).map((c) => inlineSafe(c.trim()));
+        rows.push(cells);
+        i++;
+      }
+      const thead = `<thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead>`;
+      const tbody = `<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>`;
+      out.push(`<div class="table-responsive my-4"><table class="table table-striped table-hover mb-0">${thead}${tbody}</table></div>`);
+      continue;
+    }
     if (l.trim() === "") {
       i++;
       continue;
@@ -248,7 +269,7 @@ function page(t) {
   const ogImage = t.image || (t.post && t.post.cover_image ? thumb(cleanImageUrl(t.post.cover_image)) : "");
   const preload = ogImage ? `<link rel="preload" as="image" fetchpriority="high" href="${esc(ogImage)}">` : "";
   const canonical = t.canonical || (t.admin ? t.origin + ADMIN_ROOT : t.origin + "/");
-  const robots = t.robots || "index, follow";
+  const robots = t.robots || "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
   const gscMeta = GOOGLE_SITE_VERIFICATION
     ? `<meta name="google-site-verification" content="${esc(GOOGLE_SITE_VERIFICATION)}">`
     : "";
@@ -262,6 +283,7 @@ function page(t) {
 <meta name="robots" content="${robots}">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="shortcut icon" href="/favicon.svg">
+<link rel="alternate" type="application/rss+xml" title="Blog Turismo RSS" href="/feed.xml">
 ${gscMeta}
 <title>${esc(t.title)}</title>
 <meta name="description" content="${esc(t.desc)}">
@@ -380,6 +402,13 @@ ul,ol{padding-left:1.5em;margin:0 0 1rem}
 .ratio>*{position:absolute;inset:0}
 .list-unstyled{list-style:none;padding-left:0}
 .d-grid{display:grid}
+.table-responsive{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--bs-border-radius);border:1px solid var(--bs-card-border-color);margin-block:1.5rem}
+.table{width:100%;border-collapse:collapse;font-size:.95rem;text-align:left}
+.table th,.table td{padding:.75rem 1rem;border-bottom:1px solid var(--bs-card-border-color)}
+.table th{background:var(--bs-tertiary-bg);font-weight:600}
+.table-striped tbody tr:nth-of-type(odd){background-color:rgba(0,0,0,.02)}
+:root[data-theme="dark"] .table-striped tbody tr:nth-of-type(odd){background-color:rgba(255,255,255,.02)}
+.table-hover tbody tr:hover{background-color:rgba(14,116,144,.06)}
 /* ---------- Utilidades ---------- */
 .d-flex{display:flex}.d-block{display:block}.flex-wrap{flex-wrap:wrap}.flex-column{flex-direction:column}.flex-grow-1{flex-grow:1}
 .justify-content-between{justify-content:space-between}.justify-content-center{justify-content:center}
@@ -821,6 +850,39 @@ function relatedHtml(post) {
 </section>`;
 }
 
+function insuranceHtml(post, travelMarker) {
+  const marker = String(travelMarker || "").trim() || TRAVEL_AFFILIATES.travelpayouts || "574770";
+  const dest = ((post.tags || [])[0] || post.title || "").trim();
+  const sub = encodeURIComponent(post.slug || "seguro");
+  const insuranceUrl = `https://www.segurospromo.com.br/?marker=${encodeURIComponent(marker)}&subid=${sub}`;
+  return `<section class="kit mt-4" aria-label="Seguro Viagem">
+  <div class="card border-0 shadow-sm p-4" style="background:linear-gradient(135deg,rgba(14,116,144,.08),rgba(109,40,217,.08));border-left:4px solid var(--brand-1)!important">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <div>
+        <span class="badge text-bg-primary mb-2">Dica de Viajante</span>
+        <h3 class="h5 mb-1">Vai viajar para ${esc(dest)}? Não viaje sem Seguro Viagem</h3>
+        <p class="small text-body-secondary mb-0">Imprevistos de saúde, atrasos e extravios acontecem. Cote com as melhores seguradoras e garanta até 15% de desconto.</p>
+      </div>
+      <a class="btn btn-primary text-nowrap" rel="sponsored nofollow noopener" target="_blank" href="${insuranceUrl}">
+        Cotar Seguro com Desconto
+      </a>
+    </div>
+  </div>
+</section>`;
+}
+
+function whatsappShareHtml(post, canonical) {
+  const shareText = encodeURIComponent(`${post.title} — Veja este roteiro: ${canonical}`);
+  const waUrl = `https://api.whatsapp.com/send?text=${shareText}`;
+  return `<div class="whatsapp-share mt-4 p-3 rounded-3 text-center border" style="background:rgba(37,211,102,.07);border-color:rgba(37,211,102,.3)!important">
+  <p class="mb-2 fw-semibold">Gostou deste roteiro? Compartilhe com quem vai viajar com você!</p>
+  <a class="btn btn-success d-inline-flex align-items-center gap-2 text-white" target="_blank" rel="noopener noreferrer" style="background:#25D366;border-color:#25D366" href="${waUrl}">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+    Compartilhar no WhatsApp
+  </a>
+</div>`;
+}
+
 async function postPage(request, origin, slug, travelMarker) {
   const post = await fetchPost(slug);
   if (!post) {
@@ -863,6 +925,8 @@ async function postPage(request, origin, slug, travelMarker) {
       ${kitHtml(post)}
       ${relatedHtml(post)}
       ${travelHtml(post, travelMarker)}
+      ${insuranceHtml(post, travelMarker)}
+      ${whatsappShareHtml(post, canonical)}
     </div>
   </div>
 </article>`;
@@ -1307,6 +1371,35 @@ Sitemap: ${origin}/sitemap.xml
   <url><loc>${origin}/privacidade</loc></url>
 ${paginationLinks}${links}${tagLinks}</urlset>`;
       return new Response(body, { headers: secured({ "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=86400, s-maxage=86400" }) });
+    }
+
+    // Feed RSS 2.0: /feed.xml e /rss.xml
+    if (path === "/feed.xml" || path === "/rss.xml") {
+      let posts = [];
+      try {
+        posts = await fetchPosts(30, 0);
+      } catch (e) {
+        posts = [];
+      }
+      const items = posts.map(p => `    <item>
+      <title>${esc(p.title)}</title>
+      <link>${origin}/post/${esc(p.slug)}/</link>
+      <guid isPermaLink="true">${origin}/post/${esc(p.slug)}/</guid>
+      <description>${esc(p.summary || p.meta_description || "")}</description>
+      <pubDate>${p.published_at ? new Date(p.published_at).toUTCString() : new Date().toUTCString()}</pubDate>
+    </item>`).join("\n");
+      const rss = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Blog Turismo</title>
+    <link>${origin}/</link>
+    <description>${DEFAULT_DESC}</description>
+    <language>pt-BR</language>
+    <atom:link href="${origin}${path}" rel="self" type="application/rss+xml" />
+${items}
+  </channel>
+</rss>`;
+      return new Response(rss, { headers: secured({ "Content-Type": "application/xml; charset=utf-8", ...PUB_CACHE }) });
     }
 
     // Página de tag: /tag/<tag>/

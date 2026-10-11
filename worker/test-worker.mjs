@@ -11,7 +11,7 @@ function fakePost(now = new Date().toISOString()) {
     slug: "roteiro-de-3-dias-em-gramado",
     summary: "O que fazer e onde comer em Gramado.",
     content:
-      "## Por que visitar\n\n**Gramado** é linda.\n\n- Ver o Natal Luz\n- Provar fondue\n\n![Natal Luz](https://thumb.wikimedia.org/t1.jpg?utm_source=commons.wikimedia.org)\n\n### Dicas\n\nVeja [mais](https://exemplo.com/outro).\n\n1. Primeiro\n2. Segundo\n\n## Quando ir\n\nA melhor época é no inverno.",
+      "## Por que visitar\n\n**Gramado** é linda.\n\n- Ver o Natal Luz\n- Provar fondue\n\n![Natal Luz](https://thumb.wikimedia.org/t1.jpg?utm_source=commons.wikimedia.org)\n\n### Dicas\n\nVeja [mais](https://exemplo.com/outro).\n\n1. Primeiro\n2. Segundo\n\n## Quando ir\n\nA melhor época é no inverno.\n\n| Dia | Atração |\n| :--- | :--- |\n| Dia 1 | Lago Negro |\n",
     cover_image: "https://thumb.wikimedia.org/t2.jpg?utm_source=x",
     status: "published",
     published_at: now,
@@ -249,6 +249,16 @@ async function run() {
   const postEnv = await (await worker.fetch({ url: SITE + "/post/roteiro-de-3-dias-em-gramado/" }, { TRAVELPAYOUTS_MARKER: "778478" }, {})).text();
   check("viagem env marker", postEnv.includes("aviasales.com/?marker=778478"));
   check("viagem env sem booking", !postEnv.includes("booking.com"));
+  check("post tabela markdown", post.includes('class="table-responsive') && post.includes("<td>Lago Negro</td>"));
+  check("post seguro viagem", post.includes("Seguro Viagem") && post.includes("segurospromo.com.br"));
+  check("post whatsapp share", post.includes("Compartilhar no WhatsApp") && post.includes("api.whatsapp.com/send"));
+
+  const rssRes = await worker.fetch({ url: SITE + "/feed.xml" }, {}, {});
+  const rss = await rssRes.text();
+  check("rss status 200", rssRes.status === 200);
+  check("rss header xml", rss.includes('<rss version="2.0"'));
+  check("rss channel title", rss.includes("<title>Blog Turismo</title>"));
+  check("rss item roteiro", rss.includes("<title>Roteiro de 3 Dias em Gramado</title>"));
 
   const tagRes = await worker.fetch({ url: SITE + "/tag/gramado/" }, {}, {});
   const tag = await tagRes.text();
