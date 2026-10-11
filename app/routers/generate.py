@@ -36,7 +36,6 @@ def _to_post(
         provider=provider,
     )
 
-    slug = crud.generate_slug(db, data["title"])
     urls = image_urls(topic, tags=data.get("tags"))
     content, cover = insert_images(data["content"], urls)
     content = add_attribution(content, urls)
@@ -56,7 +55,6 @@ def _to_post(
             category_id=category.id if category else None,
         ),
     )
-    post.slug = slug
     post.cover_image = cover or data.get("image_prompt", "")
     post.is_ai_generated = True
     db.commit()

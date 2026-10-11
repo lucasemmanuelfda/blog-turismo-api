@@ -36,7 +36,7 @@ def migrate():
             conn.execute(text("ALTER TABLE posts ADD COLUMN related_post_id INTEGER REFERENCES posts(id)"))
         
         indexes = {idx["name"] for idx in inspector.get_indexes("posts")}
-        for col in ("scheduled_at", "category_id", "related_post_id", "created_at"):
+        for col in ("scheduled_at", "category_id", "related_post_id", "created_at", "published_at"):
             idx_name = f"ix_posts_{col}"
             if idx_name not in indexes:
                 conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON posts ({col})"))

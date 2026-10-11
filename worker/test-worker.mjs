@@ -267,6 +267,10 @@ async function run() {
   // 404
   const nfRes = await worker.fetch({ url: SITE + "/post/nao-existe/" }, {}, {});
   check("post inexistente 404", nfRes.status === 404);
+  const unkRes = await worker.fetch({ url: SITE + "/rota-invalida-xyz" }, {}, {});
+  check("rota desconhecida 404", unkRes.status === 404);
+  const unkHtml = await unkRes.text();
+  check("rota desconhecida html 404", unkHtml.includes("Página não encontrada (404)"));
 
   // robots.txt
   const robRes = await worker.fetch({ url: SITE + "/robots.txt" }, {}, {});

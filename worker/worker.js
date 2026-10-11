@@ -51,8 +51,8 @@ export const WIDGET_HASH = "";
 
 // Alternância manual de tema claro/escuro. Script inline com hash no CSP (como o
 // widget). Sem JS, o CSS segue a preferência do sistema; com JS, data-theme vence.
-export const THEME_INLINE = `(function(){var k="tp-tema",r=document.documentElement;try{var s=localStorage.getItem(k);if(s)r.dataset.theme=s}catch(e){}document.addEventListener("DOMContentLoaded",function(){var b=document.getElementById("tema");if(!b)return;var t=r.getAttribute("data-theme");b.textContent=t==="dark"?"Modo claro":"Modo escuro";b.onclick=function(){var n=r.getAttribute("data-theme")==="dark"?"light":"dark";r.dataset.theme=n;b.textContent=n==="dark"?"Modo claro":"Modo escuro";try{localStorage.setItem(k,n)}catch(e){}}})})();`;
-export const THEME_HASH = "sha256-sjKlMHpd7IbfRh3F1gF5wESbwFKyZXOUGbJ8xQ9IGqQ=";
+export const THEME_INLINE = `(function(){var k="tp-tema",r=document.documentElement;try{var s=localStorage.getItem(k);if(s)r.dataset.theme=s}catch(e){}function u(){var b=document.getElementById("tema");if(!b)return;var d=r.dataset.theme==="dark"||(!r.dataset.theme&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);b.textContent=d?"Modo claro":"Modo escuro";b.onclick=function(){var n=d?"light":"dark";r.dataset.theme=n;try{localStorage.setItem(k,n)}catch(e){}u()}}if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",u)}else{u()}})();`;
+export const THEME_HASH = "sha256-aejoEmEiApCSMeJkvrNkMjycpRAGfEps4xH4XThsfQM=";
 
 const cspList = (extra) => ["'self'", ...extra.filter(Boolean)].join(" ");
 const CSP = `default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests; script-src ${cspList([
@@ -1198,13 +1198,7 @@ async function adminPostAction(request, action) {
 // ---------- Main / Fetch Handler ----------
 
 function handleSlugUrl(origin, path) {
-  // Aceitar /post/slug ou /<slug> direto
-  let slug;
-  if (path.startsWith("/post/")) {
-    slug = path.slice("/post/".length);
-  } else {
-    slug = path.replace(/^\//, "");
-  }
+  const slug = path.startsWith("/post/") ? path.slice(6) : path.replace(/^\//, "");
   if (!slug) return null;
   return decodeURIComponent(slug.split("/")[0]);
 }
@@ -1394,7 +1388,26 @@ ${items}
     }
 
     // Home (default)
-    return home(request, origin);
+    if (path === "/" || path === "") {
+      return home(request, origin);
+    }
+
+    // 404 para rotas inexistentes
+    return new Response(
+      page({
+        type: "website",
+        title: `Página não encontrada — ${DEFAULT_TITLE}`,
+        desc: "A página que você procura não foi encontrada.",
+        origin,
+        body: `<div class="text-center py-5">
+  <h1 class="h2 mb-3">Página não encontrada (404)</h1>
+  <p class="text-body-secondary mb-4">O artigo ou página que você procurou não existe ou mudou de endereço.</p>
+  <a class="btn btn-primary" href="/">Voltar para o início</a>
+</div>`,
+        robots: "noindex, follow",
+      }),
+      { status: 404, headers: secured({ "Content-Type": "text/html; charset=utf-8" }) }
+    );
 }
 
 export default {

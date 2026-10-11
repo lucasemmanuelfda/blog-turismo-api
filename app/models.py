@@ -42,7 +42,7 @@ class Post(Base):
     # draft | scheduled | published
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
-    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     keywords: Mapped[str] = mapped_column(Text, default="")  # JSON list
     tags: Mapped[str] = mapped_column(Text, default="")  # JSON list
