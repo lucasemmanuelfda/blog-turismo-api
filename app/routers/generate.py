@@ -37,7 +37,7 @@ def _to_post(
     )
 
     slug = crud.generate_slug(db, data["title"])
-    urls = image_urls(topic)
+    urls = image_urls(topic, tags=data.get("tags"))
     content, cover = insert_images(data["content"], urls)
     content = add_attribution(content, urls)
     post = crud.create_post(

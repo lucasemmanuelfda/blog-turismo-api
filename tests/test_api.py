@@ -431,10 +431,20 @@ def test_refresh_images_and_attribution(mocker):
     assert r.status_code == 200, r.text
     body = r.json()
     assert "loremflickr" not in body["content"]
-    assert "Fotos: Wikimedia Commons" in body["content"]
+    assert "Fotos: [Wikimedia Commons](https://commons.wikimedia.org)" in body["content"]
     assert "wikimedia.org" in (body["cover_image"] or "")
 
-    assert "Fotos: Wikimedia Commons" not in add_attribution("x", ["https://picsum.photos/a.jpg"])
+    assert "Wikimedia Commons" not in add_attribution("x", ["https://picsum.photos/a.jpg"])
+
+
+def test_refresh_all_images(mocker):
+    mocker.patch(
+        "app.services.images._wikimedia_search",
+        return_value=["https://thumb.wikimedia.org/foto1.jpg"],
+    )
+    r = client.post("/posts/refresh-all-images", headers={"Authorization": "Bearer teste123"})
+    assert r.status_code == 200, r.text
+    assert "updated" in r.json()
 
 
 def test_slugify_boundaries():

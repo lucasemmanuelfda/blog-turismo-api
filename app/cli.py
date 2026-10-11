@@ -188,7 +188,31 @@ def cmd_index_google(credentials: str | None = None, url: str | None = None, lim
         cmd.extend(["--url", url])
     else:
         cmd.append("--sitemap")
-    subprocess.run(cmd)
+def cmd_refresh_all_images():
+    """Atualiza as fotos e atribuição com hiperlink de todos os posts publicados."""
+    import re
+    from app.routers.posts import _image_keyword
+    from app.services.images import add_attribution, image_urls, insert_images
+    print("Iniciando atualização de imagens e atribuição com hiperlink...")
+    with SessionLocal() as db:
+        posts = db.scalars(select(models.Post).where(models.Post.status == "published")).all()
+        print(f"Total de posts publicados encontrados: {len(posts)}")
+        for idx, post in enumerate(posts, 1):
+            topic = _image_keyword(post)
+            print(f"[{idx}/{len(posts)}] Atualizando fotos de '{post.title}' (destino: {topic})...")
+            urls = image_urls(topic, tags=post.tags or [])
+            if urls:
+                content = re.sub(r"!\[[^\]]*\]\((?:https?:\/\/[^)\s]+)\)", "", post.content or "")
+                content = "\n".join(line for line in content.split("\n") if line.strip())
+                content, _ = insert_images(content, urls)
+                content = add_attribution(content, urls)
+                post.content = content
+                post.cover_image = urls[0]
+                print(f"  [OK] Novas fotos aplicadas. Capa: {urls[0]}")
+            else:
+                print(f"  [AVISO] Nenhuma foto encontrada para '{topic}'.")
+        db.commit()
+    print("Atualização concluída com sucesso!")
 
 
 def main():
@@ -231,6 +255,9 @@ def main():
     index_parser.add_argument("--url", "-u", type=str, default=None, help="URL especifica para indexar")
     index_parser.add_argument("--limit", "-l", type=int, default=195, help="Limite diario (padrao: 195)")
 
+    # refresh-all-images
+    subparsers.add_parser("refresh-all-images", help="Atualiza fotos e atribuicoes de todos os posts")
+
     args = parser.parse_args()
 
     if args.command == "test-connections":
@@ -251,6 +278,8 @@ def main():
         cmd_serve(args.host, args.port, reload=not args.no_reload)
     elif args.command == "index-google":
         cmd_index_google(args.credentials, args.url, args.limit)
+    elif args.command == "refresh-all-images":
+        cmd_refresh_all_images()
 
 
 if __name__ == "__main__":

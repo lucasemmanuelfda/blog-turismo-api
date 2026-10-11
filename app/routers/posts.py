@@ -1,6 +1,8 @@
 import re
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import crud, models, schemas
@@ -9,33 +11,15 @@ from app.routers.deps import require_admin
 from app.services.ai import ai_service
 from app.services.images import add_attribution, image_urls, insert_images
 
-router = APIRouter(prefix="/posts", tags=["posts"])
+logger = logging.getLogger(__name__)
 
-_STOPWORDS = {
-    "de", "do", "da", "dos", "das", "e", "o", "a", "os", "as", "em", "no",
-    "na", "para", "com", "um", "uma", "u", "guia", "roteiro", "como",
-    "sobre", "ms", "sp", "rj", "mg", "sc", "rs", "pr", "ba", "pe", "pa",
-    "go", "mt", "dias", "ano", "anos",
-    "completo", "completa", "pratico", "pratica", "ideal", "melhores",
-    "melhor", "perfeito", "tudo", "toda", "veja", "saiba", "aprenda",
-    "viajar", "viagem", "destinos", "dicas", "especial",
-}
+router = APIRouter(prefix="/posts", tags=["posts"])
 
 
 def _image_keyword(post: models.Post) -> str:
-    """Descobre a palavra-chave de imagens: URL antiga do post, depois título."""
-    from app.services.images import has_commons_image
-
-    old = re.search(r"loremflickr\.com/\d+/\d+/([^/?]+)", post.content or "")
-    if old and has_commons_image(old.group(1)):
-        return old.group(1)
-    words = re.sub(r"[^a-z0-9\s]", "", (post.title or "").lower()).split()
-    for word in words[::-1]:
-        if word.isdigit() or word in _STOPWORDS or len(word) < 3:
-            continue
-        if has_commons_image(word):
-            return word
-    return words[-1] if words else (post.title or "travel")
+    """Descobre o destino para busca de imagens priorizando tags e título."""
+    from app.services.images import _extract_clean_keyword
+    return _extract_clean_keyword(post.title or "", post.tags or [])
 
 
 @router.get("", response_model=list[schemas.PostRead])
@@ -103,6 +87,32 @@ def publish_post(
     return post
 
 
+@router.post("/refresh-all-images", response_model=dict)
+def refresh_all_images(
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+):
+    """Atualiza as imagens e atribuição com hiperlink de todos os posts publicados."""
+    posts = db.scalars(select(models.Post).where(models.Post.status == "published")).all()
+    updated = 0
+    for post in posts:
+        try:
+            topic = _image_keyword(post)
+            urls = image_urls(topic, tags=post.tags or [])
+            if urls:
+                content = re.sub(r"!\[[^\]]*\]\((?:https?:\/\/[^)\s]+)\)", "", post.content or "")
+                content = "\n".join(line for line in content.split("\n") if line.strip())
+                content, _ = insert_images(content, urls)
+                content = add_attribution(content, urls)
+                post.content = content
+                post.cover_image = urls[0]
+                updated += 1
+        except Exception as exc:
+            logger.warning(f"Erro ao atualizar imagens do post {post.id}: {exc}")
+    db.commit()
+    return {"total": len(posts), "updated": updated}
+
+
 @router.post("/{post_id}/refresh-images", response_model=schemas.PostRead)
 def refresh_images(
     post_id: int,
@@ -116,7 +126,7 @@ def refresh_images(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post não encontrado")
 
     topic = keyword or _image_keyword(post)
-    urls = image_urls(topic)
+    urls = image_urls(topic, tags=post.tags or [])
     content = re.sub(r"!\[[^\]]*\]\((?:https?:\/\/[^)\s]+)\)", "", post.content or "")
     content = "\n".join(line for line in content.split("\n") if line.strip())
     content, _ = insert_images(content, urls)

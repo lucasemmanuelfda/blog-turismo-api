@@ -54,3 +54,9 @@ def test_cli_index_google_dispatch():
     with patch("sys.argv", ["cli", "index-google", "--limit", "10"]), patch("app.cli.cmd_index_google") as mock_index:
         cli.main()
         mock_index.assert_called_once_with(None, None, 10)
+
+
+def test_cli_refresh_all_images_dispatch():
+    with patch("sys.argv", ["cli", "refresh-all-images"]), patch("app.cli.cmd_refresh_all_images") as mock_refresh:
+        cli.main()
+        mock_refresh.assert_called_once()
