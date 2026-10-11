@@ -124,8 +124,13 @@ def list_posts(
         stmt = stmt.where(models.Post.status == status)
     if category:
         stmt = stmt.where(models.Post.category.has(models.Category.slug == category))
+    order = (
+        models.Post.published_at.desc().nulls_last()
+        if status == "published"
+        else models.Post.created_at.desc()
+    )
     return db.scalars(
-        stmt.order_by(models.Post.created_at.desc()).limit(limit).offset(offset)
+        stmt.order_by(order, models.Post.id.desc()).limit(limit).offset(offset)
     ).all()
 
 

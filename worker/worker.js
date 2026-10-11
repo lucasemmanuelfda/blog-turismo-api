@@ -527,9 +527,9 @@ async function fetchAllPosts() {
   const all = [];
   let offset = 0;
   while (true) {
-    const batch = await fetchPosts(50, offset);
+    const batch = await fetchPosts(200, offset);
     all.push(...batch);
-    if (batch.length < 50) break;
+    if (batch.length < 200) break;
     offset += batch.length;
   }
   return all;
@@ -1308,15 +1308,19 @@ Sitemap: ${origin}/sitemap.xml
       try {
         posts = await fetchAllPosts();
         for (const p of posts) {
-          links += `<url><loc>${origin}/post/${esc(p.slug)}/</loc><lastmod>${sitemapDate(p.updated_at || p.published_at)}</lastmod></url>`;
+          const mod = sitemapDate(p.updated_at || p.published_at);
+          const modTag = mod ? `<lastmod>${mod}</lastmod>` : "";
+          links += `<url><loc>${origin}/post/${esc(p.slug)}/</loc>${modTag}</url>`;
         }
       } catch (e) {
         // sitemap com só páginas estáticas se API indisponível
       }
       const totalPages = Math.max(1, Math.ceil(posts.length / HOME_PAGE_SIZE));
       let paginationLinks = "";
+      const homeDate = sitemapDate(posts[0] && (posts[0].updated_at || posts[0].published_at));
+      const homeModTag = homeDate ? `<lastmod>${homeDate}</lastmod>` : "";
       for (let i = 2; i <= totalPages; i++) {
-        paginationLinks += `<url><loc>${origin}/page/${i}/</loc><lastmod>${sitemapDate(posts[0] && (posts[0].updated_at || posts[0].published_at))}</lastmod></url>`;
+        paginationLinks += `<url><loc>${origin}/page/${i}/</loc>${homeModTag}</url>`;
       }
       const tagSet = new Set();
       for (const p of posts) {
@@ -1331,7 +1335,7 @@ Sitemap: ${origin}/sitemap.xml
       }
       const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>${origin}/</loc><lastmod>${sitemapDate(posts[0] && (posts[0].updated_at || posts[0].published_at))}</lastmod></url>
+  <url><loc>${origin}/</loc>${homeModTag}</url>
   <url><loc>${origin}/sobre</loc></url>
   <url><loc>${origin}/privacidade</loc></url>
 ${paginationLinks}${links}${tagLinks}</urlset>`;
