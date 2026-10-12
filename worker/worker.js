@@ -128,11 +128,17 @@ function cleanImageUrl(u) {
 const THUMB_W = 960;
 
 // Rebaixa thumbs do Wikimedia de qualquer largura para THUMB_W mantendo formato e host.
+// Converte uploads crus para thumbnails 960px oficiais para evitar erro 429 de hotlink.
 function thumb(u) {
   const s = String(u || "");
-  return /^https:\/\/(?:upload|thumb)\.wikimedia\.org\/wikipedia\/commons\/thumb\//.test(s)
-    ? s.replace(/\d+px-([^/]+)$/, `${THUMB_W}px-$1`)
-    : s;
+  if (/^https:\/\/(?:upload|thumb)\.wikimedia\.org\/wikipedia\/commons\/thumb\//.test(s)) {
+    return s.replace(/\d+px-([^/]+)$/, `${THUMB_W}px-$1`);
+  }
+  const m = s.match(/^https:\/\/(?:upload|thumb)\.wikimedia\.org\/wikipedia\/commons\/([0-9a-f]\/[0-9a-f]{2}\/([^/?#]+))/i);
+  if (m) {
+    return `https://thumb.wikimedia.org/wikipedia/commons/thumb/${m[1]}/${THUMB_W}px-${m[2]}`;
+  }
+  return s;
 }
 
 // ---------- Markdown → HTML (SSR, sem JS) ----------
@@ -1463,7 +1469,7 @@ export default {
     const method = (request.method || "GET").toUpperCase();
 
     // Cache Edge da Cloudflare para rotas públicas GET
-    const CACHE_VERSION = "v4";
+    const CACHE_VERSION = "v5";
     const isAdmin = path === ADMIN_ROOT || path.startsWith(ADMIN_ROOT + "/");
     const isCacheable = method === "GET" && !isAdmin && !path.startsWith("/admin");
     const edgeCache = (typeof caches !== "undefined" && caches && caches.default) ? caches.default : null;

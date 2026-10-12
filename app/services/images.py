@@ -44,8 +44,39 @@ def _is_valid_travel_photo(title: str, mime: str, thumb_url: str) -> bool:
     return not any(term in title_lower for term in BAD_TERMS)
 
 
+def is_image_url_live(url: str, timeout: float = 5.0) -> bool:
+    """Verifica ativamente se a URL responde com HTTP 200 e tipo MIME de imagem real."""
+    if not url or not url.startswith("http"):
+        return False
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 BlogTurismo/1.0"
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers, method="HEAD")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status == 200:
+                ct = (resp.headers.get("Content-Type") or "").lower()
+                return "image/" in ct
+    except urllib.error.HTTPError as err:
+        if err.code not in (405, 301, 302, 307, 308):
+            return False
+    except Exception:
+        return False
+
+    try:
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status == 200:
+                ct = (resp.headers.get("Content-Type") or "").lower()
+                chunk = resp.read(512)
+                return bool(chunk) and "image/" in ct
+            return False
+    except Exception:
+        return False
+
+
 def _wikimedia_search(keyword: str, n: int) -> list[str]:
-    """Fotos livres do Wikimedia Commons com filtro rigoroso para paisagens reais."""
+    """Fotos livres do Wikimedia Commons com filtro rigoroso e verificação ativa de status HTTP 200."""
     params = urllib.parse.urlencode(
         {
             "action": "query",
@@ -74,7 +105,7 @@ def _wikimedia_search(keyword: str, n: int) -> list[str]:
             title = page.get("title", "")
             if thumb and _is_valid_travel_photo(title, mime, thumb):
                 clean_thumb = thumb.split("&", 1)[0]
-                if clean_thumb not in out:
+                if clean_thumb not in out and is_image_url_live(clean_thumb):
                     out.append(clean_thumb)
             if len(out) >= n:
                 break
@@ -120,7 +151,7 @@ def _extract_clean_keyword(topic: str, tags: list[str] | None = None) -> str:
 
 
 def image_urls(topic: str, tags: list[str] | None = None, n: int = 3) -> list[str]:
-    """n imagens 16:9 por tema (sem mapas, apenas fotos de paisagem real)."""
+    """n imagens 16:9 por tema (sem mapas, apenas fotos de paisagem real e ativamente verificadas via HTTP)."""
     keyword = _extract_clean_keyword(topic, tags)
     if not get_settings().validate_images:
         return [_picsum(keyword, i) for i in range(1, n + 1)]
@@ -129,7 +160,7 @@ def image_urls(topic: str, tags: list[str] | None = None, n: int = 3) -> list[st
         # Tenta com o termo simples se a combinação composta não retornar nada
         urls = _wikimedia_search(keyword.split()[0], n)
     if not urls:
-        urls = [_picsum(keyword, i) for i in range(1, n + 1)]
+        urls = [u for u in [_picsum(keyword, i) for i in range(1, n + 1)] if is_image_url_live(u)]
     return urls[:n]
 
 

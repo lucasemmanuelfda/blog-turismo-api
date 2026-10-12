@@ -794,3 +794,12 @@ def test_image_validation_rejects_tiff_and_non_jpeg():
         "image/jpeg",
         "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/62/PARNA.jpg/1280px-PARNA.jpg",
     )
+
+
+def test_is_image_url_live():
+    from app.services.images import is_image_url_live
+
+    # URL vazia ou inválida deve falhar de imediato
+    assert not is_image_url_live("")
+    assert not is_image_url_live("not-a-url")
+    assert not is_image_url_live("ftp://invalid.com/img.jpg")
