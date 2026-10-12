@@ -21,9 +21,10 @@ const API_BASE_URL = "https://blog-turismo-api.onrender.com";
 const ADMIN_COOKIE = "admin_token";
 export const ADMIN_ROOT = "/painel-interno-9f3k7q2x";
 
-const DEFAULT_TITLE = "Blog Turismo";
+const SITE_NAME = "Blog Turismo";
+const DEFAULT_TITLE = "Blog Turismo — Roteiros, Dicas e Guias de Destinos";
 const DEFAULT_DESC =
-  "Destinos, roteiros e dicas de viagem atualizados todos os dias.";
+  "Roteiros práticos, dicas e guias de viagem pelo Brasil e pelo mundo atualizados todos os dias.";
 
 // Páginas públicas podem ser cacheadas por 5 min (Cloudflare + navegador).
 // Conteúdo muda 1x/dia; cache curto reduz o custo de repetição sem estagnar.
@@ -468,30 +469,72 @@ ${t.body}
 
 // ---------- JSON-LD ----------
 
-function blogJsonLd() {
+function blogJsonLd(origin = SITE_ORIGIN) {
   return JSON.stringify({
     "@context": "https://schema.org",
-    "@type": "Blog",
-    name: "Blog Turismo",
-    description: DEFAULT_DESC,
-    inLanguage: "pt-BR",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": `${origin}/#website`,
+        "url": `${origin}/`,
+        "name": "Blog Turismo",
+        "alternateName": ["BlogTurismo", "Blog Turismo Brasil"],
+        "description": DEFAULT_DESC,
+        "inLanguage": "pt-BR",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Blog Turismo",
+          "url": `${origin}/`
+        }
+      },
+      {
+        "@type": "Blog",
+        "@id": `${origin}/#blog`,
+        "url": `${origin}/`,
+        "name": "Blog Turismo",
+        "description": DEFAULT_DESC,
+        "inLanguage": "pt-BR",
+        "isPartOf": { "@id": `${origin}/#website` }
+      }
+    ]
   });
 }
 
-function postJsonLd(a) {
+function postJsonLd(a, origin = SITE_ORIGIN) {
   return JSON.stringify({
     "@context": "https://schema.org",
-    "@type": "BlogPosting",
-    headline: a.title,
-    description: a.summary || a.meta_description,
-    image: a.cover_image ? cleanImageUrl(a.cover_image) : undefined,
-    datePublished: a.published_at,
-    dateModified: a.updated_at || a.published_at,
-    inLanguage: "pt-BR",
-    keywords: (a.tags || []).map((tag) => String(tag).trim()).filter(Boolean).join(", ") || undefined,
-    mainEntityOfPage: { "@type": "WebPage", "@id": `${SITE_ORIGIN}/post/${a.slug}/` },
-    author: { "@type": "Organization", name: "Blog Turismo" },
-    publisher: { "@type": "Organization", name: "Blog Turismo" },
+    "@graph": [
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Início",
+            "item": `${origin}/`
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": a.title,
+            "item": `${origin}/post/${a.slug}/`
+          }
+        ]
+      },
+      {
+        "@type": "BlogPosting",
+        "headline": a.title,
+        "description": a.summary || a.meta_description,
+        "image": a.cover_image ? cleanImageUrl(a.cover_image) : undefined,
+        "datePublished": a.published_at,
+        "dateModified": a.updated_at || a.published_at,
+        "inLanguage": "pt-BR",
+        "keywords": (a.tags || []).map((tag) => String(tag).trim()).filter(Boolean).join(", ") || undefined,
+        "mainEntityOfPage": { "@type": "WebPage", "@id": `${origin}/post/${a.slug}/` },
+        "author": { "@type": "Organization", "name": "Blog Turismo" },
+        "publisher": { "@type": "Organization", "name": "Blog Turismo" }
+      }
+    ]
   });
 }
 
@@ -705,7 +748,7 @@ ${nav.length ? `<nav class="d-flex gap-2 justify-content-center mt-5" aria-label
       origin,
       image: heroImage,
       body,
-      jsonld: blogJsonLd(),
+      jsonld: blogJsonLd(origin),
     }),
     { headers: secured({ "Content-Type": "text/html; charset=utf-8", ...PUB_CACHE }) }
   );
@@ -906,7 +949,7 @@ async function postPage(request, origin, slug, travelMarker) {
       image: cover,
       post,
       body,
-      jsonld: postJsonLd(post),
+      jsonld: postJsonLd(post, origin),
     }),
     { headers: secured({ "Content-Type": "text/html; charset=utf-8", ...POST_CACHE }) }
   );
@@ -943,7 +986,7 @@ async function tagPage(request, origin, tag) {
       origin,
       body,
       robots: filtered.length ? "index, follow" : "noindex, follow",
-      jsonld: blogJsonLd(),
+      jsonld: blogJsonLd(origin),
     }),
     { headers: secured({ "Content-Type": "text/html; charset=utf-8", ...PUB_CACHE }) }
   );
