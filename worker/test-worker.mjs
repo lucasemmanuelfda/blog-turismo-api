@@ -1,6 +1,6 @@
 // Harness de teste local do Worker (Node >= 24). Sem dependências.
 // Roda com: node worker/test-worker.mjs  (na raiz do repo)
-import worker, { ADMIN_ROOT, TRAVEL_AFFILIATES, WIDGET_INLINE, WIDGET_HASH, THEME_INLINE, THEME_HASH } from "./worker.js";
+import worker, { ADMIN_ROOT, TRAVEL_AFFILIATES, DRIVE_INLINE, DRIVE_HASH, WIDGET_INLINE, WIDGET_HASH, THEME_INLINE, THEME_HASH } from "./worker.js";
 
 const SITE = "https://exemplo.workers.dev";
 
@@ -138,18 +138,23 @@ async function run() {
   check("home preload LCP", home.includes('<link rel="preload" as="image" fetchpriority="high"'));
   check("home thumb 960", home.includes("/960px-Cidades_2.jpg"));
   check("home cache-control", (homeRes.headers.get("Cache-Control") || "").includes("max-age=300"));
-  check("home sem analytics (token vazio)", !home.includes("cloudflareinsights"));
-  check("home drive script", home.includes('src="https://emrld.ltd/NTc0Nzcw.js?t=574770"'));
+  check("home drive inline", home.includes(DRIVE_INLINE));
+  check("home sem drive script estatico no head", !home.includes('<script async data-cmp-ab="2" src='));
   check("home sem widget busca voos", !home.includes("tpemd.com"));
   const homeCsp = homeRes.headers.get("Content-Security-Policy") || "";
   check("csp baseline", homeCsp.includes("default-src 'self'"));
   check("csp sem cloudflare (token vazio)", !homeCsp.includes("cloudflareinsights"));
   check("csp permite drive", homeCsp.includes("script-src 'self' https://emrld.ltd"));
+  check("csp drive hash", homeCsp.includes(`'${DRIVE_HASH}'`));
   check("csp connect drive", homeCsp.includes("connect-src 'self' https://emrld.ltd"));
   check("csp sem widget tpemd", !homeCsp.includes("https://tpemd.com"));
   check("csp tema hash", homeCsp.includes(`'${THEME_HASH}'`));
   check("home botao tema", home.includes('<button id="tema"'));
   check("home script tema", home.includes('getElementById("tema")'));
+
+  const dDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(DRIVE_INLINE));
+  const dB64 = btoa(String.fromCharCode(...new Uint8Array(dDigest)));
+  check("csp drive hash bate com inline", `sha256-${dB64}` === DRIVE_HASH);
 
   if (WIDGET_INLINE) {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(WIDGET_INLINE));

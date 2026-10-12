@@ -768,3 +768,29 @@ def test_change_password_requires_current_and_auth():
         json={"current_password": "teste123", "new_password": "x12345"},
     )
     assert r.status_code == 401
+
+
+def test_image_validation_rejects_tiff_and_non_jpeg():
+    from app.services.images import _is_valid_travel_photo
+
+    # TIFF e lossy-page (mesmo terminando em .tif.jpg) devem ser rejeitados
+    assert not _is_valid_travel_photo(
+        "File:Cachoeira Loquinhas Bakurikukua(02).tif",
+        "image/tiff",
+        "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d4/Cachoeira.tif/lossy-page1-960px-Cachoeira.tif.jpg",
+    )
+    assert not _is_valid_travel_photo(
+        "File:Cerberodon_viridis.tif",
+        "image/tiff",
+        "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/89/Cerberodon_viridis.tif/lossy-page1-1280px-Cerberodon_viridis.tif.jpg",
+    )
+    # SVG, GIF, PNG
+    assert not _is_valid_travel_photo("File:Map.svg", "image/svg+xml", "https://upload.wikimedia.org/map.svg.png")
+    assert not _is_valid_travel_photo("File:Banner.png", "image/png", "https://upload.wikimedia.org/banner.png")
+
+    # JPEG autêntico de viagem deve ser aceito
+    assert _is_valid_travel_photo(
+        "File:PARNA da Chapada dos Veadeiros.jpg",
+        "image/jpeg",
+        "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/62/PARNA.jpg/1280px-PARNA.jpg",
+    )

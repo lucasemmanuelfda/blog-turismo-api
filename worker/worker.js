@@ -40,9 +40,12 @@ const POST_CACHE = { "Cache-Control": "public, max-age=3600, s-maxage=3600" };
 // Cloudflare Web Analytics (sem cookies). Preencha o token do painel para ativar.
 const CF_BEACON_TOKEN = "";
 
-// Travelpayouts Drive: monetiza links automaticamente. Cole a URL do seu painel;
-// vazio desliga o script.
+// Travelpayouts Drive: monetiza links automaticamente. O loader é inline (hash fixado no CSP
+// abaixo); carregado sob primeira interação humana (scroll, toque, cursor) para não acionar
+// bloqueio do robots.txt do emrld.ltd durante a inspeção de crawlers e Googlebot.
 const DRIVE_SRC = "https://emrld.ltd/NTc0Nzcw.js?t=574770";
+export const DRIVE_INLINE = `(function(){var l=0;function n(){if(l)return;l=1;["scroll","pointerdown","touchstart","keydown","mousemove"].forEach(function(e){window.removeEventListener(e,n,{capture:true,passive:true})});var s=document.createElement("script");s.async=true;s.dataset.cmpAb="2";s.src="${DRIVE_SRC}";document.head.appendChild(s)}["scroll","pointerdown","touchstart","keydown","mousemove"].forEach(function(e){window.addEventListener(e,n,{capture:true,passive:true})})})();`;
+export const DRIVE_HASH = "sha256-Xc3q4P4pFQyQKb8PuSgQpo6teVXGe7Y8n8ZK0AFm47U=";
 
 // Travelpayouts White Label: metasearch de voos. O loader é inline (hash fixado no CSP
 // abaixo); vazio desliga o script e os containers. O hash cobre o texto exato de
@@ -59,6 +62,7 @@ const cspList = (extra) => ["'self'", ...extra.filter(Boolean)].join(" ");
 const CSP = `default-src 'self'; img-src * data:; media-src *; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests; script-src ${cspList([
   CF_BEACON_TOKEN && "https://static.cloudflareinsights.com",
   DRIVE_SRC && "https://emrld.ltd",
+  DRIVE_INLINE && `'${DRIVE_HASH}'`,
   WIDGET_INLINE && "https://tpemd.com",
   WIDGET_INLINE && `'${WIDGET_HASH}'`,
   THEME_INLINE && `'${THEME_HASH}'`,
@@ -448,7 +452,7 @@ ul,ol{padding-left:1.5em;margin:0 0 1rem}
 code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em; border-radius:6px; font-size:.9em; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 </style>
-${!t.admin && DRIVE_SRC ? `<script async data-cmp-ab="2" src="${esc(DRIVE_SRC)}"></script>` : ""}
+${!t.admin && DRIVE_INLINE ? `<script>${DRIVE_INLINE}</script>` : ""}
 ${!t.admin && WIDGET_INLINE ? `<script>${WIDGET_INLINE}</script>` : ""}
 ${!t.admin && THEME_INLINE ? `<script>${THEME_INLINE}</script>` : ""}
 ${!t.admin && CF_BEACON_TOKEN ? `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="${esc(JSON.stringify({ token: CF_BEACON_TOKEN }))}"></script>` : ""}
@@ -1459,7 +1463,7 @@ export default {
     const method = (request.method || "GET").toUpperCase();
 
     // Cache Edge da Cloudflare para rotas públicas GET
-    const CACHE_VERSION = "v3";
+    const CACHE_VERSION = "v4";
     const isAdmin = path === ADMIN_ROOT || path.startsWith(ADMIN_ROOT + "/");
     const isCacheable = method === "GET" && !isAdmin && !path.startsWith("/admin");
     const edgeCache = (typeof caches !== "undefined" && caches && caches.default) ? caches.default : null;

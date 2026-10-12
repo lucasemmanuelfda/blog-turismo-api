@@ -18,23 +18,29 @@ BAD_TERMS = {
     "map", "mapa", "plan", "diagram", "chart", "flag", "bandeira",
     "coat of arms", "brasao", "brasão", "escudo", "logo", "locator",
     "satellite", "satelite", "document", "esquema", "icon", ".gif",
-    "infographic", "infografico", "simbolo", "símbolo"
+    "infographic", "infografico", "simbolo", "símbolo", ".tif", ".tiff",
+    "lossy-page", "specimen"
 }
 
 
 def _is_valid_travel_photo(title: str, mime: str, thumb_url: str) -> bool:
-    """Valida se o arquivo é uma foto real em formato JPEG e não mapa/gráfico/vetor."""
+    """Valida se o arquivo é uma foto real em formato JPEG e não mapa/gráfico/vetor/TIFF."""
     mime_lower = (mime or "").lower()
     thumb_lower = (thumb_url or "").lower()
-    is_jpeg = (
-        mime_lower.startswith("image/jpeg")
-        or mime_lower.startswith("image/jpg")
-        or ".jpg" in thumb_lower
-        or ".jpeg" in thumb_lower
-    )
+    title_lower = (title or "").lower()
+
+    # Rejeita explicitamente formatos problemáticos (TIFFs quebram o renderizador da Wikimedia)
+    if any(ext in thumb_lower or ext in title_lower for ext in (".tif", ".tiff", ".svg", ".gif", "lossy-page")):
+        return False
+
+    # Deve ser mime image/jpeg ou terminar em .jpg/.jpeg
+    if mime_lower and not (mime_lower.startswith("image/jpeg") or mime_lower.startswith("image/jpg")):
+        return False
+
+    is_jpeg = ".jpg" in thumb_lower or ".jpeg" in thumb_lower
     if not is_jpeg:
         return False
-    title_lower = (title or "").lower()
+
     return not any(term in title_lower for term in BAD_TERMS)
 
 
