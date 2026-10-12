@@ -1238,12 +1238,10 @@ async function handleRoute(request, env, ctx, url, path, origin, method) {
       });
     }
 
-    // Verificação do Google Search Console (URL prefix, método "arquivo HTML").
-    // O GSC pede o arquivo /google<hex>.html contendo "google-site-verification: <nome do arquivo>".
-    // Como o token É o nome do arquivo, servimos qualquer googleXXXX.html automaticamente.
-    if (/^\/google[0-9a-f]{8,64}\.html$/.test(path)) {
-      const filename = path.slice(1); // ex.: googlea1b2c3d4e5f6a7b8.html
-      return new Response(`google-site-verification: ${filename}\n`, {
+    // Verificação do Google Search Console via arquivo HTML (apenas arquivo autorizado pelo proprietário)
+    const gscFile = (env?.GOOGLE_VERIFICATION_FILE || "").trim();
+    if (gscFile && path === `/${gscFile}`) {
+      return new Response(`google-site-verification: ${gscFile}\n`, {
         headers: secured({ "Content-Type": "text/plain; charset=utf-8" }),
       });
     }

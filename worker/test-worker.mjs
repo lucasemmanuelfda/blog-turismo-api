@@ -279,10 +279,13 @@ async function run() {
   check("robots sitemap", rob.includes("Sitemap: " + SITE + "/sitemap.xml"));
 
   // verificação do Google Search Console (URL prefix / arquivo HTML)
-  const gRes = await worker.fetch({ url: SITE + "/googlea1b2c3d4e5f6a7b8.html" }, {}, {});
+  const gFile = "googlea1b2c3d4e5f6a7b8.html";
+  const gRes = await worker.fetch({ url: SITE + "/" + gFile }, { GOOGLE_VERIFICATION_FILE: gFile }, {});
   const gBody = await gRes.text();
   check("gsc 200", gRes.status === 200);
   check("gsc body", gBody.trim() === "google-site-verification: googlea1b2c3d4e5f6a7b8.html");
+  const gNoKey = await worker.fetch({ url: SITE + "/googlehack123.html" }, {}, {});
+  check("gsc nao autorizado 404", gNoKey.status === 404);
 
   // IndexNow: /<key>.txt serve a chave; sem env, a rota não existe
   const iKey = "a1b2c3d4e5f6a7b8c9d0";
