@@ -50,6 +50,7 @@ class PostCreate(PostBase):
 
 class PostUpdate(BaseModel):
     title: str | None = None
+    slug: str | None = None
     summary: str | None = None
     content: str | None = None
     cover_image: str | None = None

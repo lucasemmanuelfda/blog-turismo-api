@@ -69,3 +69,13 @@ class Post(Base):
     related_post: Mapped["Post | None"] = relationship(
         remote_side="Post.id", foreign_keys=[related_post_id]
     )
+
+class PostRedirect(Base):
+    __tablename__ = "post_redirects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    old_slug: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    post_id: Mapped[int] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    post: Mapped["Post"] = relationship("Post", backref="redirects", passive_deletes=True)

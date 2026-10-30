@@ -1,12 +1,13 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import models
 from app.config import get_settings
-from app.database import Base, engine, migrate
+from app.database import Base, engine, migrate, get_db
+from sqlalchemy import text
 from app.routers import auth, categories, generate, posts
 from app import scheduler as scheduler_module
 
@@ -25,9 +26,12 @@ async def lifespan(app: FastAPI):
     auth.seed_admin_password()
     if settings.environment == "production":
         _scheduler = scheduler_module.start()
-    yield
-    if _scheduler:
-        scheduler_module.stop(_scheduler)
+    try:
+        yield
+    finally:
+        if _scheduler:
+            scheduler_module.stop(_scheduler)
+        engine.dispose()
 
 
 app = FastAPI(
@@ -64,3 +68,16 @@ def root():
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"status": "ok"}
+
+
+@app.api_route("/health/ready", methods=["GET", "HEAD"])
+def health_ready():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "ready", "database": "connected"}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database unreachable: {exc}",
+        )

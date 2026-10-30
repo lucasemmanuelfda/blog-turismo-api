@@ -13,8 +13,11 @@ if DATABASE_URL.startswith("postgres://"):
 elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)
+connect_args = {"check_same_thread": False, "timeout": 30} if DATABASE_URL.startswith("sqlite") else {}
+engine_kwargs = {"connect_args": connect_args, "pool_pre_ping": True}
+if not DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["pool_recycle"] = 1800
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
@@ -40,6 +43,9 @@ def migrate():
             idx_name = f"ix_posts_{col}"
             if idx_name not in indexes:
                 conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON posts ({col})"))
+        if "ix_posts_status_published_at" not in indexes:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_posts_status_published_at ON posts (status, published_at)"))
+        Base.metadata.create_all(bind=conn)
 
 
 def get_db():

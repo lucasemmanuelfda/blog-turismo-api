@@ -1,9 +1,10 @@
 import json
 import re
 import time
+import unicodedata
 from typing import Any
 
-from openai import OpenAI
+from openai import OpenAI, APIConnectionError
 
 from app.config import get_settings
 from app.services.memory import memory
@@ -33,14 +34,14 @@ class AIService:
         self.client = OpenAI(
             api_key=self.settings.ai_api_key or "sk-nokey",
             base_url=(self.settings.ai_base_url or "https://api.openai.com/v1"),
-            timeout=90,
+            timeout=40,
         )
         self.fallback_client: OpenAI | None = None
         if self.settings.ai_fallback_api_key and self.settings.ai_fallback_base_url:
             self.fallback_client = OpenAI(
                 api_key=self.settings.ai_fallback_api_key,
                 base_url=self.settings.ai_fallback_base_url,
-                timeout=90,
+                timeout=40,
             )
 
     @property
@@ -65,7 +66,10 @@ Sua voz: um viajante curioso, prático e honesto que conversa com um amigo — n
 Como escrever com autoridade e humanidade (E-E-A-T do Google):
 - Use primeira pessoa com moderação ("na minha visita", "o que mais me surpreendeu"), com opinião honesta (diga o que realmente vale o preço e o que pode pular).
 - Parágrafos de 2 a 4 frases, com ritmo variado e começos diversos (nunca comece todo parágrafo com o nome do destino).
-- Detalhes sensoriais e práticos: horário exato de menor fila, vento no fim de tarde, cheiro da comida de rua, sensação térmica, tipo de calçado necessário.
+- Detalhes sensoriais e práticos: varie o ritmo das frases (burstiness: mescle frases curtas e diretas com explicações ricas), cite exatamente 1 prato ou doce típico autêntico da região, e aponte com franqueza 1 "furada clássica que você deve evitar" (armadilha para turistas).
+- Cenários práticos essenciais: inclua 2 opções de passeios cobertos/culturais para dias de chuva ("Plano B para chuva"), informe a voltagem local predominante (110V ou 220V) e padrão de tomadas, oriente sobre formas de pagamento (Pix é amplamente aceito ou há necessidade de dinheiro em espécie?) e alerte sobre conectividade e sinal de celular (especialmente em trilhas, parques e praias remotas, avisando se operadoras pegam bem ou se é preciso baixar mapas offline).
+- Logística de viagem obrigatória: informe o aeroporto de acesso mais próximo e melhor modalidade de transfer/estrada, o tempo mínimo de permanência ideal para aproveitar o destino sem correria e orientações de câmbio/moeda caso seja destino internacional.
+- Sustentabilidade e inclusão: informe se há taxa de preservação ambiental/sustentabilidade exigida pelo município/parque, e sugira alternativas para famílias com crianças pequenas e dicas de acessibilidade para idosos ou pessoas com mobilidade reduzida.
 - NÃO invente dados históricos complexos ou estatísticas não verificáveis. Use faixas de valores realistas em Reais (R$).
 
 OBRIGATÓRIO incluir no Markdown do "content":
@@ -138,6 +142,8 @@ Retorne SOMENTE JSON válido, sem texto antes ou depois:
 
         memory_context = memory.context_block(topic)
         research_context = research(topic)
+        if research_context and len(research_context) > 1500:
+            research_context = research_context[:1500]
         research_block = (
             "\nPesquisa rápida na internet (use como referência factual; NÃO invente "
             f"dados além deles; prefira dados concretos destes trechos):\n{research_context}\n"
@@ -247,23 +253,31 @@ Estrutura obrigatória do artigo:
         """Chama a IA com até 3 tentativas, aguardando entre falhas (503/limite)."""
         attempts = 3
         delay = 4
+        base_url_str = str(getattr(client, "base_url", "")).lower()
+        is_gemini_or_deepseek = "deepseek.com" in base_url_str or "googleapis.com" in base_url_str
         for attempt in range(attempts):
             try:
                 try:
-                    return client.chat.completions.create(
-                        model=model,
-                        messages=[
+                    kwargs: dict[str, Any] = {
+                        "model": model,
+                        "messages": [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
-                        temperature=0.7,
-                        response_format={"type": "json_object"},
-                    )
+                        "temperature": 0.7,
+                    }
+                    if not is_gemini_or_deepseek:
+                        kwargs["response_format"] = {"type": "json_object"}
+                    else:
+                        kwargs["messages"][0]["content"] += "\nResponda estritamente com JSON válido."
+                    resp = client.chat.completions.create(**kwargs)
+                    if resp and resp.choices and getattr(resp.choices[0], "finish_reason", None) == "length":
+                        logger.warning("Resposta da LLM truncada por limite de comprimento (finish_reason=length)")
+                    return resp
                 except Exception as req_err:
                     err_msg = str(req_err).lower()
                     if "response_format" in err_msg or "json_object" in err_msg or "400" in err_msg:
-                        # Fallback para modelos que não suportam o parâmetro response_format
-                        return client.chat.completions.create(
+                        resp = client.chat.completions.create(
                             model=model,
                             messages=[
                                 {"role": "system", "content": system_prompt + "\nImportante: responda estritamente em formato JSON válido."},
@@ -271,14 +285,23 @@ Estrutura obrigatória do artigo:
                             ],
                             temperature=0.7,
                         )
+                        if resp and resp.choices and getattr(resp.choices[0], "finish_reason", None) == "length":
+                            logger.warning("Resposta da LLM truncada por limite de comprimento (finish_reason=length)")
+                        return resp
                     raise
+            except APIConnectionError as conn_err:
+                logger.warning("Falha de conexão com a API da IA (tentativa %d/%d): %s", attempt + 1, attempts, conn_err)
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(1)
             except Exception:
                 if attempt == attempts - 1:
                     raise
                 time.sleep(delay * (attempt + 1))
 
     def _parse_json(self, raw: str) -> dict[str, Any]:
-        text = raw.strip()
+        raw = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
+        text = unicodedata.normalize("NFC", raw.strip())
         if text.startswith("```"):
             text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
             text = re.sub(r"\s*```$", "", text)
@@ -304,12 +327,27 @@ Estrutura obrigatória do artigo:
         }
         defaults.update(data)
         data = defaults
+        if data.get("title"):
+            data["title"] = re.sub(r"\.\s*$", "", data["title"]).strip()
 
         if not isinstance(data.get("facts"), dict):
             data["facts"] = {}
         data["kit_recommendations"] = _clean_kit(data.get("kit_recommendations"))
         if not data["content"] or len(data["content"]) < 300:
             data["content"] = self._fallback_markdown(data["title"] or "título")
+        else:
+            # Substitui clichês comuns por voz humana e autêntica
+            cliche_subs = [
+                (r"(?i)n[aã]o deixe de visitar", "uma parada que recomendo é"),
+                (r"(?i)n[aã]o deixe de conhecer", "uma dica valiosa é visitar"),
+                (r"(?i)imperd[ií]vel", "muito recomendado"),
+                (r"(?i)uma experi[eê]ncia [uú]nica", "um passeio marcante"),
+                (r"(?i)surreal", "impressionante"),
+                (r"(?i)monumental", "imponente"),
+            ]
+            for pat, rep in cliche_subs:
+                data["content"] = re.sub(pat, rep, data["content"])
+            data["content"] = re.sub(r"\n{3,}", "\n\n", data["content"]).strip()
         return data
 
     @staticmethod

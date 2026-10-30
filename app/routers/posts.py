@@ -1,7 +1,7 @@
 import re
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -24,7 +24,7 @@ def _image_keyword(post: models.Post) -> str:
 
 @router.get("", response_model=list[schemas.PostRead])
 def list_posts(
-    status_f: str | None = Query(default=None, alias="status"),
+    status_f: str | None = Query(default=None, alias="status", pattern="^(draft|published)$"),
     category: str | None = None,
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -43,13 +43,16 @@ def relink_posts(
 
 
 @router.get("/{slug_or_id}", response_model=schemas.PostRead)
-def get_post(slug_or_id: str, db: Session = Depends(get_db)):
+def get_post(slug_or_id: str, response: Response, db: Session = Depends(get_db)):
+    is_redirect = False
     if slug_or_id.isdigit():
         post = crud.get_post(db, int(slug_or_id))
     else:
-        post = crud.get_post_by_slug(db, slug_or_id)
+        post, is_redirect = crud.get_post_by_slug_or_redirect(db, slug_or_id)
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post não encontrado")
+    if is_redirect:
+        response.headers["X-Canonical-Slug"] = post.slug
     return post
 
 

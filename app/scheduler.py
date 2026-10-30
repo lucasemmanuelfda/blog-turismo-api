@@ -16,6 +16,9 @@ def publish_job() -> None:
         count = crud.publish_due_posts(db)
         if count:
             logger.info("Publicados %d posts agendados", count)
+    except Exception as exc:
+        db.rollback()
+        logger.error("Erro no job de publicação agendada: %s", exc)
     finally:
         db.close()
 

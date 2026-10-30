@@ -7,7 +7,8 @@ import json
 import logging
 import threading
 import urllib.parse
-from datetime import date
+import os
+from datetime import date, datetime, timedelta
 
 from app.config import get_settings
 from app.services import http_get_json
@@ -48,10 +49,28 @@ class TrendService:
         except (FileNotFoundError, ValueError, json.JSONDecodeError):
             self.data = {}
 
+    def _purge_old_entries(self) -> None:
+        cutoff = date.today() - timedelta(days=7)
+        keys_to_del = []
+        for k in self.data:
+            try:
+                if datetime.strptime(k, "%Y-%m-%d").date() < cutoff:
+                    keys_to_del.append(k)
+            except ValueError:
+                pass
+        for k in keys_to_del:
+            self.data.pop(k, None)
+
     def _save(self) -> None:
+        parent = os.path.dirname(self.path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        self._purge_old_entries()
+        tmp_path = f"{self.path}.tmp"
         with self._lock:
-            with open(self.path, "w", encoding="utf-8") as f:
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=1)
+            os.replace(tmp_path, self.path)
 
     @staticmethod
     def _dedupe(items: list[str], max_keys: int = 4) -> list[str]:

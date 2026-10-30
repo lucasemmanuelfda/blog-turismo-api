@@ -30,9 +30,11 @@ class MemoryManager:
         parent = os.path.dirname(self.path)
         if parent:
             os.makedirs(parent, exist_ok=True)
+        tmp_path = f"{self.path}.tmp"
         with self._lock:
-            with open(self.path, "w", encoding="utf-8") as f:
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=1)
+            os.replace(tmp_path, self.path)
 
     def _key(self, topic: str) -> str:
         words = topic.lower().replace("-", " ").split()

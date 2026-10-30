@@ -2,7 +2,8 @@ import re
 from datetime import datetime
 from typing import Sequence
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import delete, or_, select, update
+from sqlalchemy.orm import selectinload
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -33,6 +34,19 @@ def list_categories(db: Session) -> Sequence[models.Category]:
 
 
 # ---------- Posts ----------
+def _dedupe_tags(tags: list[str]) -> list[str]:
+    seen = set()
+    out = []
+    for t in tags:
+        clean = (t or "").strip()
+        if not clean:
+            continue
+        lower = clean.lower()
+        if lower not in seen:
+            seen.add(lower)
+            out.append(clean)
+    return out
+
 
 def _all_post_slugs(db: Session) -> list[str]:
     return list(db.scalars(select(models.Post.slug)).all())
@@ -56,7 +70,14 @@ def _related_score(a: models.Post, b: models.Post) -> int:
 
 def find_related_post(db: Session, post: models.Post) -> models.Post | None:
     """Melhor post de tema correlacionado (publicado > rascunho, sem espelho)."""
-    candidates = list(db.scalars(select(models.Post).where(models.Post.id != post.id)))
+    candidates = list(
+        db.scalars(
+            select(models.Post)
+            .where(models.Post.id != post.id)
+            .order_by(models.Post.id.desc())
+            .limit(50)
+        )
+    )
     if not candidates:
         return None
     # ponytail: O(n²) por post no backfill; irrelevante para blogs (< 1k posts).
@@ -84,16 +105,18 @@ def backfill_related_posts(db: Session) -> int:
 
 
 def create_post(db: Session, data: schemas.PostCreate) -> models.Post:
+    target_slug = unique_slug(data.title, _all_post_slugs(db))
+    db.execute(delete(models.PostRedirect).where(models.PostRedirect.old_slug == target_slug))
     post = models.Post(
         title=data.title,
-        slug=unique_slug(data.title, _all_post_slugs(db)),
+        slug=target_slug,
         summary=data.summary,
         content=data.content,
         cover_image=data.cover_image,
         status=data.status,
         scheduled_at=data.scheduled_at,
         keywords=serialize_list(data.keywords),
-        tags=serialize_list(data.tags),
+        tags=serialize_list(_dedupe_tags(data.tags)),
         kit_recommendations=serialize_list([k.model_dump() for k in data.kit_recommendations]),
         meta_title=data.meta_title or data.title,
         meta_description=data.meta_description,
@@ -102,8 +125,10 @@ def create_post(db: Session, data: schemas.PostCreate) -> models.Post:
     )
     if not post.related_post_id:
         target = find_related_post(db, post)
-        if target:
+        if target and target.id != post.id:
             post.related_post_id = target.id
+    elif post.related_post_id == post.id:
+        post.related_post_id = None
     if data.status == "published" and not post.published_at:
         post.published_at = utcnow()
     db.add(post)
@@ -119,7 +144,12 @@ def list_posts(
     limit: int = 20,
     offset: int = 0,
 ) -> Sequence[models.Post]:
-    stmt = select(models.Post)
+    if status is not None and status not in ("draft", "published"):
+        return []
+    stmt = (
+        select(models.Post)
+        .options(selectinload(models.Post.category), selectinload(models.Post.related_post))
+    )
     if status:
         stmt = stmt.where(models.Post.status == status)
     if category:
@@ -135,11 +165,34 @@ def list_posts(
 
 
 def get_post(db: Session, post_id: int) -> models.Post | None:
-    return db.get(models.Post, post_id)
+    stmt = (
+        select(models.Post)
+        .options(selectinload(models.Post.category), selectinload(models.Post.related_post))
+        .where(models.Post.id == post_id)
+    )
+    return db.scalar(stmt)
 
 
 def get_post_by_slug(db: Session, slug: str) -> models.Post | None:
-    return db.scalar(select(models.Post).where(models.Post.slug == slug))
+    stmt = (
+        select(models.Post)
+        .options(selectinload(models.Post.category), selectinload(models.Post.related_post))
+        .where(models.Post.slug == slug)
+    )
+    return db.scalar(stmt)
+
+
+def get_post_by_slug_or_redirect(db: Session, slug: str) -> tuple[models.Post | None, bool]:
+    post = get_post_by_slug(db, slug)
+    if post:
+        return post, False
+    redirect_stmt = select(models.PostRedirect).where(models.PostRedirect.old_slug == slug)
+    redir = db.scalar(redirect_stmt)
+    if redir:
+        post = get_post(db, redir.post_id)
+        if post:
+            return post, True
+    return None, False
 
 
 def publish_post(db: Session, post_id: int) -> models.Post | None:
@@ -173,11 +226,32 @@ def update_post(db: Session, post_id: int, data: schemas.PostUpdate) -> models.P
     if not post:
         return None
 
+    old_slug = post.slug
+    new_slug = getattr(data, "slug", None)
+    if new_slug and new_slug != old_slug and post.published_at is not None:
+        # Remova qualquer redirect antigo que aponte para new_slug para evitar loop / auto-redirect
+        db.execute(delete(models.PostRedirect).where(models.PostRedirect.old_slug == new_slug))
+        existing_redir = db.scalar(select(models.PostRedirect).where(models.PostRedirect.old_slug == old_slug))
+        if existing_redir:
+            existing_redir.post_id = post.id
+        else:
+            db.add(models.PostRedirect(old_slug=old_slug, post_id=post.id))
+        # 1-hop: atualiza todos os redirects antigos que apontavam para este post garantindo destino direto
+        db.execute(
+            update(models.PostRedirect)
+            .where(models.PostRedirect.post_id == post.id)
+            .values(post_id=post.id)
+        )
+
     for field, value in data.model_dump(exclude_unset=True).items():
         if not hasattr(post, field):
             continue
-        if field in ("keywords", "tags", "kit_recommendations"):
+        if field == "tags":
+            value = serialize_list(_dedupe_tags(value or []))
+        elif field in ("keywords", "kit_recommendations"):
             value = serialize_list(value or [])
+        elif field == "related_post_id" and value == post.id:
+            value = None
         setattr(post, field, value)
 
     if post.status == "published" and not post.published_at:
@@ -190,6 +264,7 @@ def update_post(db: Session, post_id: int, data: schemas.PostUpdate) -> models.P
 def delete_post(db: Session, post_id: int) -> bool:
     post = db.get(models.Post, post_id)
     if post:
+        db.execute(delete(models.PostRedirect).where(models.PostRedirect.post_id == post_id))
         db.delete(post)
         db.commit()
         return True

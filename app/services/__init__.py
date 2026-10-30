@@ -11,17 +11,17 @@ def http_get_json(url: str, timeout: float, headers: dict[str, str] | None = Non
 
 
 def slugify(text: str, max_len: int = 200) -> str:
-    """Converte texto em slug URL-friendly (mantém acentos básicos de pt-BR se possível)."""
+    """Converte texto em slug URL-friendly (sublinhados viram hífens, hífens múltiplos colapsam)."""
     text = unicodedata.normalize("NFKD", text)
     text = text.encode("ascii", "ignore").decode("ascii")
-    text = text.lower()
+    text = text.lower().replace("_", "-")
     text = re.sub(r"[^a-z0-9\u00e0-\u00ff]+", "-", text)
     text = re.sub(r"-{2,}", "-", text).strip("-")
     return text[:max_len]
 
 
 def unique_slug(text: str, existing_slugs: list[str]) -> str:
-    base = slugify(text)
+    base = re.sub(r"-{2,}", "-", slugify(text).replace("_", "-")).strip("-")
     if base not in existing_slugs:
         return base
     counter = 2

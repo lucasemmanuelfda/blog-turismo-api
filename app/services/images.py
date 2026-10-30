@@ -1,6 +1,7 @@
 import logging
 import re
 import urllib.parse
+from functools import lru_cache
 from urllib.parse import quote
 
 from app.config import get_settings
@@ -44,6 +45,7 @@ def _is_valid_travel_photo(title: str, mime: str, thumb_url: str) -> bool:
     return not any(term in title_lower for term in BAD_TERMS)
 
 
+@lru_cache(maxsize=128)
 def is_image_url_live(url: str, timeout: float = 5.0) -> bool:
     """Verifica ativamente se a URL responde com HTTP 200 e tipo MIME de imagem real."""
     if not url or not url.startswith("http"):
@@ -94,25 +96,39 @@ def _wikimedia_search(keyword: str, n: int) -> list[str]:
     headers = {
         "User-Agent": "BlogTurismoAPI/1.0 (https://github.com/lucasemmanuelfda/blog-turismo-api)"
     }
-    try:
-        payload = http_get_json(url, timeout=20, headers=headers)
-        pages = (payload.get("query") or {}).get("pages") or {}
-        out: list[str] = []
-        for page in pages.values():
-            info = (page.get("imageinfo") or [{}])[0]
-            thumb = info.get("thumburl") or ""
-            mime = info.get("mime", "")
-            title = page.get("title", "")
-            if thumb and _is_valid_travel_photo(title, mime, thumb):
-                clean_thumb = thumb.split("&", 1)[0]
-                if clean_thumb not in out and is_image_url_live(clean_thumb):
-                    out.append(clean_thumb)
-            if len(out) >= n:
-                break
-        return out[:n]
-    except Exception as exc:
-        logger.warning("Wikimedia Commons indisponível: %s", exc)
+    payload = None
+    for attempt in range(3):
+        try:
+            payload = http_get_json(url, timeout=20, headers=headers)
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code in (429, 500, 502, 503, 504) and attempt < 2:
+                continue
+            logger.warning("Wikimedia Commons indisponível (HTTP %s): %s", getattr(exc, "code", None), exc)
+            return []
+        except Exception as exc:
+            if attempt < 2:
+                continue
+            logger.warning("Wikimedia Commons indisponível: %s", exc)
+            return []
+
+    if not payload:
         return []
+
+    pages = (payload.get("query") or {}).get("pages") or {}
+    out: list[str] = []
+    for page in pages.values():
+        info = (page.get("imageinfo") or [{}])[0]
+        thumb = info.get("thumburl") or ""
+        mime = info.get("mime", "")
+        title = page.get("title", "")
+        if thumb and _is_valid_travel_photo(title, mime, thumb):
+            clean_thumb = thumb.split("&", 1)[0]
+            if clean_thumb not in out and is_image_url_live(clean_thumb):
+                out.append(clean_thumb)
+        if len(out) >= n:
+            break
+    return out[:n]
 
 
 def has_commons_image(keyword: str) -> bool:

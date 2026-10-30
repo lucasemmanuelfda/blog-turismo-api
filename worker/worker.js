@@ -28,8 +28,8 @@ const DEFAULT_DESC =
 
 // Páginas públicas podem ser cacheadas por 5 min (Cloudflare + navegador).
 // Conteúdo muda 1x/dia; cache curto reduz o custo de repetição sem estagnar.
-const PUB_CACHE = { "Cache-Control": "public, max-age=300, s-maxage=300" };
-const POST_CACHE = { "Cache-Control": "public, max-age=3600, s-maxage=3600" };
+const PUB_CACHE = { "Cache-Control": "public, max-age=300, s-maxage=300, stale-while-revalidate=86400" };
+const POST_CACHE = { "Cache-Control": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400" };
 
 // ---------- Utilitários ----------
 
@@ -78,6 +78,7 @@ const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
 };
 
 function secured(extra = {}) {
@@ -162,7 +163,7 @@ function mdToHtml(md, toc) {
   const inlineSafe = (s) =>
     esc(s)
       .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, ($0, alt, src) => {
-        return `<img src="${esc(thumb(cleanImageUrl(src)))}" alt="${esc(alt || "foto")}" loading="lazy" decoding="async" />`;
+        return `<img src="${esc(thumb(cleanImageUrl(src)))}" alt="${esc(alt || "foto")}" width="1200" height="675" loading="lazy" decoding="async" />`;
       })
       .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.+?)\*/g, "<em>$1</em>")
@@ -172,7 +173,7 @@ function mdToHtml(md, toc) {
     const l = lines[i];
     const img = l.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (img) {
-      out.push(`<figure class="img"><img src="${esc(thumb(cleanImageUrl(img[2])))}" alt="${esc(img[1] || "foto")}" loading="lazy" decoding="async" /></figure>`);
+      out.push(`<figure class="img"><img src="${esc(thumb(cleanImageUrl(img[2])))}" alt="${esc(img[1] || "foto")}" width="1200" height="675" loading="lazy" decoding="async" /></figure>`);
       i++;
       continue;
     }
@@ -265,7 +266,7 @@ function adminNav() {
   <div class="container d-flex flex-wrap align-items-center justify-content-between gap-2">
     <a class="navbar-brand fw-bold" href="${ADMIN_ROOT}">Blog Turismo <span class="badge text-bg-warning align-middle">admin</span></a>
     <form class="d-flex mb-0" method="post" action="${ADMIN_ROOT}/logout">
-      <button class="btn btn-sm btn-outline-light" type="submit">Sair</button>
+      <button class="btn btn-sm btn-outline-light" type="submit" aria-label="Sair do painel administrativo">Sair</button>
     </form>
   </div>
 </nav>`;
@@ -294,15 +295,19 @@ ${gscMeta}
 <title>${esc(t.title)}</title>
 <meta name="description" content="${esc(t.desc)}">
 <link rel="canonical" href="${esc(canonical)}">
+${(t.post || t.type === "article") ? `<link rel="preconnect" href="https://upload.wikimedia.org" crossorigin>` : ""}
 ${preload}
 <meta property="og:type" content="${t.type}">
+<meta property="og:locale" content="pt_BR">
 <meta property="og:site_name" content="Blog Turismo">
 <meta property="og:title" content="${esc(t.ogTitle || t.title)}">
 <meta property="og:description" content="${esc(t.desc)}">
 <meta property="og:url" content="${esc(canonical)}">
 ${ogImage ? `<meta property="og:image" content="${esc(ogImage)}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="675">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="${esc(ogImage)}">` : `<meta name="twitter:card" content="summary">`}
+<meta name="twitter:image" content="${esc(ogImage)}">` : `<meta name="twitter:card" content="summary_large_image">`}
 ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
 <style>
 :root {
@@ -333,7 +338,7 @@ ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
   --bs-link-hover-color:#7bcbe4;
   --bs-card-bg:#182029;
   --bs-card-border-color:#2b3540;
-  --bs-secondary-color:#93a0ae;
+  --bs-secondary-color:#9cb3c9;
   --bs-tertiary-bg:#151c24;
 }
 @media (prefers-color-scheme: dark) {
@@ -345,13 +350,15 @@ ${t.jsonld ? `<script type="application/ld+json">${t.jsonld}</script>` : ""}
     --bs-link-hover-color:#7bcbe4;
     --bs-card-bg:#182029;
     --bs-card-border-color:#2b3540;
-    --bs-secondary-color:#93a0ae;
+    --bs-secondary-color:#9cb3c9;
     --bs-tertiary-bg:#151c24;
   }
 }
 /* ---------- Base: substitui o bootstrap.min.css do CDN (só o que o site usa) ---------- */
+:focus-visible { outline: 2px solid var(--brand-1); outline-offset: 2px; }
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;background:var(--bs-body-bg);color:var(--bs-body-color);font-family:var(--bs-body-font-family);font-size:var(--bs-body-font-size);line-height:var(--bs-body-line-height)}
+body{margin:0;background:var(--bs-body-bg);color:var(--bs-body-color);font-family:var(--bs-body-font-family);font-size:var(--bs-body-font-size);line-height:var(--bs-body-line-height);overflow-wrap:break-word}
+img{aspect-ratio:16/9;object-fit:cover}
 a{color:var(--bs-link-color)}
 a:hover{color:var(--bs-link-hover-color)}
 h1,h2,h3,h4,h5,h6{font-weight:700;line-height:1.32;margin:0 0 .5rem}
@@ -437,19 +444,29 @@ ul,ol{padding-left:1.5em;margin:0 0 1rem}
 .visually-hidden-focusable:not(:focus):not(:focus-within){position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 /* ---------- Customizações do site ---------- */
 .blognav { background:linear-gradient(140deg,#0f7490,#54139b 80%); }
-.progress { position:fixed; top:0; left:0; width:100%; height:3px; transform:scaleX(0); transform-origin:0 50%;
+html { scroll-padding-top: 80px; scroll-behavior: smooth; }
+.progress { position:fixed; top:0; left:0; width:100%; height:4px; border-radius:0 2px 2px 0; transform:scaleX(0); transform-origin:0 50%;
   background:linear-gradient(90deg,#0e7490,#6d28d9); z-index:1050; pointer-events:none; }
+.callout-tip { background:rgba(15,116,144,0.06); border-left:4px solid var(--brand-1); padding:1rem 1.25rem; border-radius:8px; margin:1.5rem 0; }
 @supports (animation-timeline: scroll()) {
   .progress { animation:progress-grow linear; animation-timeline:scroll(root); }
 }
 @keyframes progress-grow { to { transform:scaleX(1); } }
 .hero .cover-img { min-height:300px; }
-.post-card { height:100%; transition:transform .18s ease, box-shadow .18s ease; }
-.post-card:hover { transform:translateY(-3px); box-shadow:0 14px 30px -14px rgba(24,32,40,.28)!important; }
+.post-card { height:100%; transition:transform .18s ease, box-shadow .18s ease; box-shadow:0 4px 12px rgba(0,0,0,.04)!important; }
+.content { font-size:1.05rem; line-height:1.8; }
+.post-summary-box { background:var(--bs-tertiary-bg); border-left:4px solid var(--brand-1); padding:1.25rem 1.5rem; border-radius:.75rem; margin-bottom:2rem; font-size:1.1rem; line-height:1.7; box-shadow:0 4px 14px rgba(0,0,0,.03); }
+.content p:first-of-type::first-letter { font-size:2.8em; float:left; margin:0.1em 0.15em 0 0; line-height:0.8; font-weight:700; color:var(--brand-1); }
+.post-card:hover { transform:translateY(-2px); box-shadow:0 12px 24px -10px rgba(24,32,40,.2)!important; }
+.post-card .btn { transition:transform 0.15s ease; }
+.post-card:hover .btn { transform:translateX(2px); }
+.related .post-card { transition:transform .2s ease, box-shadow .2s ease; }
+.related .post-card:hover { transform:translateY(-2px); box-shadow:0 12px 24px -10px rgba(24,32,40,.2)!important; }
 .cover-img { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:var(--bs-secondary-color,#ddd); }
 .post-hero-card .card-body { font-size:1.05rem; }
 .toc-sticky { position:sticky; top:88px; }
-.content { font-size:1.05rem; line-height:1.78; }
+.toc a { display:inline-block; min-height:44px; line-height:1.4; padding:10px 0; }
+
 .content h1, .content h2, .content h3 { line-height:1.32; margin:1.7em 0 .55em; letter-spacing:-.2px; }
 .content p { margin:.85em 0; }
 .content img { width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:14px; display:block; background:var(--bs-secondary-color,#ddd); }
@@ -457,6 +474,20 @@ ul,ol{padding-left:1.5em;margin:0 0 1rem}
 .content ul, .content ol { padding-left:1.3em; margin:.85em 0; }
 code { white-space:pre-wrap; background:rgba(14,116,144,.1); padding:.15em .4em; border-radius:6px; font-size:.9em; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+hr { border:0; border-top:1px solid var(--bs-card-border-color); margin:2rem 0; opacity:0.6; }
+@media print {
+  .navbar, footer, .btn, .progress, .toc, .visually-hidden-focusable { display:none !important; }
+  body { background:#fff !important; color:#000 !important; }
+  .card { box-shadow:none !important; border:none !important; }
+}
 </style>
 ${!t.admin && DRIVE_INLINE ? `<script>${DRIVE_INLINE}</script>` : ""}
 ${!t.admin && WIDGET_INLINE ? `<script>${WIDGET_INLINE}</script>` : ""}
@@ -539,10 +570,15 @@ function postJsonLd(a, origin = SITE_ORIGIN) {
         "datePublished": a.published_at,
         "dateModified": a.updated_at || a.published_at,
         "inLanguage": "pt-BR",
+        "wordCount": a.content ? a.content.split(/\s+/).length : undefined,
         "keywords": (a.tags || []).map((tag) => String(tag).trim()).filter(Boolean).join(", ") || undefined,
         "mainEntityOfPage": { "@type": "WebPage", "@id": `${origin}/post/${a.slug}/` },
         "author": { "@type": "Organization", "name": "Blog Turismo" },
-        "publisher": { "@type": "Organization", "name": "Blog Turismo" }
+        "publisher": {
+          "@type": "Organization",
+          "name": "Blog Turismo",
+          "logo": { "@type": "ImageObject", "url": `${origin}/favicon.svg` }
+        }
       }
     ]
   });
@@ -592,7 +628,15 @@ async function fetchPost(slug) {
   const u = `${API_BASE_URL}/posts/${encodeURIComponent(slug)}`;
   const res = await fetchWithRetry(u, { headers: { Accept: "application/json" } });
   if (!res.ok) return null;
-  return res.json();
+  const canonicalSlug = res.headers && typeof res.headers.get === "function" ? res.headers.get("X-Canonical-Slug") : null;
+  const data = await res.json();
+  if (canonicalSlug && canonicalSlug !== slug) {
+    return { redirect: canonicalSlug };
+  }
+  if (data && data.slug && data.slug !== slug) {
+    return { redirect: data.slug };
+  }
+  return data;
 }
 
 async function apiCall(path, { method = "GET", token, body } = {}) {
@@ -674,7 +718,7 @@ function relatedBadge(post, badgeClass = "text-bg-secondary") {
 function cardsHtml(posts) {
   return posts.map((p) => {
     const img = p.cover_image
-      ? `<a class="d-block ratio ratio-16x9" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100" loading="lazy" src="${esc(thumb(cleanImageUrl(p.cover_image)))}" alt="" role="presentation" /></a>`
+      ? `<a class="d-block ratio ratio-16x9" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100" width="960" height="540" loading="lazy" src="${esc(thumb(cleanImageUrl(p.cover_image)))}" alt="" role="presentation" /></a>`
       : "";
     const rel = relatedBadge(p);
     const date = p.published_at ? `<time datetime="${esc(p.published_at)}">${new Date(p.published_at).toLocaleDateString("pt-BR")}</time>` : "";
@@ -696,7 +740,7 @@ function heroHtml(p) {
   return `<article class="card hero border-0 shadow-sm mb-5 overflow-hidden">
   <div class="row g-0">
     <div class="col-md-6">
-      <a class="d-block h-100" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100 h-100" loading="eager" fetchpriority="high" src="${esc(thumb(cleanImageUrl(p.cover_image)))}" alt="" role="presentation" /></a>
+      <a class="d-block h-100" href="/post/${esc(p.slug)}/" tabindex="-1" aria-hidden="true"><img class="cover-img object-fit-cover w-100 h-100" width="1200" height="675" loading="eager" fetchpriority="high" src="${esc(thumb(cleanImageUrl(p.cover_image)))}" alt="" role="presentation" /></a>
     </div>
     <div class="col-md-6 d-flex flex-column justify-content-center p-4 p-md-5">
       ${relatedBadge(p, "text-bg-primary align-self-start mb-3") || `<span class="badge rounded-pill text-bg-primary align-self-start mb-3">Turismo</span>`}
@@ -893,7 +937,7 @@ function relatedHtml(post) {
 function whatsappShareHtml(post, canonical) {
   const shareText = encodeURIComponent(`${post.title} — Veja este roteiro: ${canonical}`);
   const waUrl = `https://api.whatsapp.com/send?text=${shareText}`;
-  return `<div class="whatsapp-share mt-4 p-3 rounded-3 text-center border" style="background:rgba(37,211,102,.07);border-color:rgba(37,211,102,.3)!important">
+  return `<div class="whatsapp-share mt-4 p-4 rounded-4 text-center border" style="border-radius:14px!important" style="background:rgba(37,211,102,.07);border-color:rgba(37,211,102,.3)!important">
   <p class="mb-2 fw-semibold">Gostou deste roteiro? Compartilhe com quem vai viajar com você!</p>
   <a class="btn btn-success d-inline-flex align-items-center gap-2 text-white" target="_blank" rel="noopener noreferrer" style="background:#25D366;border-color:#25D366" href="${waUrl}">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
@@ -903,14 +947,21 @@ function whatsappShareHtml(post, canonical) {
 }
 
 async function postPage(request, origin, slug, travelMarker) {
-  const post = await fetchPost(slug);
-  if (!post) {
+  const resData = await fetchPost(slug);
+  if (!resData) {
     return new Response("Artigo não encontrado", {
       status: 404,
       statusText: "Not Found",
       headers: secured({ "Content-Type": "text/plain; charset=utf-8" }),
     });
   }
+  if (resData.redirect) {
+    return new Response(null, {
+      status: 301,
+      headers: { Location: `${origin}/post/${encodeURIComponent(resData.redirect)}/` },
+    });
+  }
+  const post = resData;
   const title = post.meta_title || post.title || DEFAULT_TITLE;
   const desc = post.meta_description || post.summary || DEFAULT_DESC;
   const ogTitle = post.title;
@@ -934,10 +985,11 @@ async function postPage(request, origin, slug, travelMarker) {
 </ol></nav>
 <article class="post post-single">
   <div class="card border-0 shadow-sm overflow-hidden">
-    ${cover ? `<img class="cover-img w-100 post-cover" loading="eager" fetchpriority="high" src="${esc(cover)}" alt="${esc(post.title)}" />` : ""}
+    ${cover ? `<img class="cover-img w-100 post-cover" width="1200" height="675" loading="eager" fetchpriority="high" src="${esc(cover)}" alt="${esc(post.title)}" />` : ""}
     <div class="card-body p-4 p-md-5">
       ${meta}
       <h1 class="h2 mb-4">${esc(post.title)}</h1>
+      ${post.summary ? `<div class="post-summary-box text-body-secondary"><strong>Resumo:</strong> ${esc(post.summary)}</div>` : ""}
       <div class="row g-4 layout">
         ${tocHtml ? `<div class="col-lg-9 content">${content}</div>${tocHtml}` : `<div class="col-lg-12 content">${content}</div>`}
       </div>
@@ -1021,7 +1073,7 @@ ${erro ? `<div class="alert alert-danger" role="alert">${esc(erro)}</div>` : ""}
         <label class="form-label" for="admin-password">Senha</label>
         <input class="form-control" type="password" id="admin-password" name="password" autocomplete="current-password" required>
       </div>
-      <button class="btn btn-primary w-100" type="submit">Entrar</button>
+      <button class="btn btn-primary w-100" type="submit" aria-label="Entrar no painel administrativo">Entrar</button>
     </form>
   </div>
 </div>
@@ -1109,7 +1161,7 @@ ${flash}
         <div class="col-md-4"><input class="form-control" type="password" name="new_password" placeholder="Nova senha" autocomplete="new-password" minlength="4" required></div>
         <div class="col-md-4"><input class="form-control" type="password" name="confirm_password" placeholder="Confirmar nova senha" autocomplete="new-password" minlength="4" required></div>
       </div>
-      <button class="btn btn-outline-primary mt-2" type="submit">Salvar nova senha</button>
+      <button class="btn btn-outline-primary mt-2" type="submit" aria-label="Salvar nova senha de administrador">Salvar nova senha</button>
     </div>
   </form>
 </details>
@@ -1118,7 +1170,7 @@ ${flash}
     <h2 class="h5 mb-3">Gerar artigo</h2>
     <div class="row g-2">
       <div class="col"><input class="form-control" type="text" name="topic" placeholder="Tema (ex.: Roteiro de 2 dias em Paraty)" required minlength="3" maxlength="200"></div>
-      <div class="col-auto"><button class="btn btn-primary" type="submit">Gerar rascunho</button></div>
+      <div class="col-auto"><button class="btn btn-primary" type="submit" aria-label="Gerar novo rascunho de artigo">Gerar rascunho</button></div>
     </div>
   </div>
 </form>
@@ -1391,17 +1443,23 @@ ${paginationLinks}${links}${tagLinks}</urlset>`;
     if (path === "/feed.xml" || path === "/rss.xml") {
       let posts = [];
       try {
-        posts = await fetchPosts(30, 0);
+        const all = await fetchPosts(50, 0);
+        const now = new Date();
+        posts = all.filter(p => p.status === "published" && p.published_at && new Date(p.published_at) <= now).slice(0, 30);
       } catch (e) {
         posts = [];
       }
-      const items = posts.map(p => `    <item>
+      const items = posts.map(p => {
+        const coverUrl = p.cover_image ? cleanImageUrl(p.cover_image) : "";
+        const enclosure = coverUrl ? `\n      <enclosure url="${esc(coverUrl)}" length="0" type="image/jpeg" />` : "";
+        return `    <item>
       <title>${esc(p.title)}</title>
       <link>${origin}/post/${esc(p.slug)}/</link>
       <guid isPermaLink="true">${origin}/post/${esc(p.slug)}/</guid>
-      <description>${esc(p.summary || p.meta_description || "")}</description>
+      <description>${esc(p.summary || p.meta_description || "")}</description>${enclosure}
       <pubDate>${p.published_at ? new Date(p.published_at).toUTCString() : new Date().toUTCString()}</pubDate>
-    </item>`).join("\n");
+    </item>`;
+      }).join("\n");
       const rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
@@ -1450,9 +1508,18 @@ ${items}
         title: `Página não encontrada — ${DEFAULT_TITLE}`,
         desc: "A página que você procura não foi encontrada.",
         origin,
-        body: `<div class="text-center py-5">
+        body: `<nav aria-label="breadcrumb" class="mb-4"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="/">Início</a></li><li class="breadcrumb-item active" aria-current="page">404</li></ol></nav>
+<div class="text-center py-5">
   <h1 class="h2 mb-3">Página não encontrada (404)</h1>
   <p class="text-body-secondary mb-4">O artigo ou página que você procurou não existe ou mudou de endereço.</p>
+  <div class="p-4 rounded-3 text-start mx-auto mb-4" style="max-width:540px; background:var(--bs-tertiary-bg);">
+    <h2 class="h6 fw-bold mb-3">Destinos populares que você pode gostar:</h2>
+    <ul class="list-unstyled mb-0 d-grid gap-2">
+      <li><a class="text-decoration-none" href="/tag/gramado/">🌲 Roteiros em Gramado e Serra Gaúcha</a></li>
+      <li><a class="text-decoration-none" href="/tag/rio-de-janeiro/">🏖️ Melhores praias e dicas do Rio de Janeiro</a></li>
+      <li><a class="text-decoration-none" href="/tag/fernando-de-noronha/">🐢 Guia prático de Fernando de Noronha</a></li>
+    </ul>
+  </div>
   <a class="btn btn-primary" href="/">Voltar para o início</a>
 </div>`,
         robots: "noindex, follow",
@@ -1465,7 +1532,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
-    const origin = url.origin;
+    const origin = (env && env.CUSTOM_DOMAIN) ? `https://${env.CUSTOM_DOMAIN}` : url.origin;
     const method = (request.method || "GET").toUpperCase();
 
     // Cache Edge da Cloudflare para rotas públicas GET
