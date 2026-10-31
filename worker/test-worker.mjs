@@ -251,6 +251,7 @@ async function run() {
   check("viagem env sem seguros promo", !postEnv.includes("segurospromo.com.br"));
   check("post tabela markdown", post.includes('class="table-responsive') && post.includes("<td>Lago Negro</td>"));
   check("post whatsapp share", post.includes("Compartilhar no WhatsApp") && post.includes("api.whatsapp.com/send"));
+  check("post sem atributo style duplicado", !/style="[^"]*"\s+style="/.test(post));
 
   const rssRes = await worker.fetch({ url: SITE + "/feed.xml" }, {}, {});
   const rss = await rssRes.text();
