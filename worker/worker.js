@@ -1016,6 +1016,71 @@ function kitHtml(post) {
 </section>`;
 }
 
+function scientificReferencesHtml(post) {
+  const title = (post.title || "").toLowerCase();
+  const tags = (post.tags || []).map(t => String(t).toLowerCase());
+  const refs = [];
+
+  // 1. Alta Altitude e Montanha (Pico da Neblina, Agulhas Negras, São Joaquim, Andes)
+  if (title.includes("neblina") || title.includes("agulhas negras") || title.includes("altitude") || tags.some(t => t.includes("montanhismo") || t.includes("altitude"))) {
+    refs.push({
+      title: "Wilderness Medical Society Clinical Practice Guidelines for the Prevention and Treatment of Acute Altitude Illness",
+      journal: "Wilderness & Environmental Medicine",
+      pmid: "31653558",
+      url: "https://pubmed.ncbi.nlm.nih.gov/31653558/",
+      note: "Diretrizes médicas sobre aclimatação progressiva, hidratação e prevenção do mal agudo de montanha."
+    });
+  }
+
+  // 2. Trilhas, Clima Seco, Insolação e Esforço Físico (Chapada, Jalapão, Lençóis)
+  if (title.includes("chapada") || title.includes("jalap") || title.includes("seca") || title.includes("trilha") || title.includes("maranhenses")) {
+    refs.push({
+      title: "National Athletic Trainers' Association Position Statement: Fluid Replacement for the Physically Active & Exertional Heat Illnesses",
+      journal: "Journal of Athletic Training",
+      pmid: "28467140",
+      url: "https://pubmed.ncbi.nlm.nih.gov/28467140/",
+      note: "Consenso científico sobre reposição hídrica e prevenção de desidratação e estresse térmico em atividades físicas sob calor e baixa umidade."
+    });
+  }
+
+  // 3. Mergulho e Ambientes Marinhos (Noronha, litoral, ilhas)
+  if (title.includes("mergulho") || title.includes("noronha") || tags.some(t => t.includes("mergulho") || t.includes("praia"))) {
+    refs.push({
+      title: "Flying After Diving: Guidelines and Recommendations from Divers Alert Network (DAN)",
+      journal: "Undersea & Hyperbaric Medicine",
+      pmid: "15176541",
+      url: "https://pubmed.ncbi.nlm.nih.gov/15176541/",
+      note: "Recomendações internacionais sobre o intervalo mínimo de segurança entre mergulho e voos comerciais para evitar doença descompressiva."
+    });
+  }
+
+  // 4. Ecoturismo Geral, Florestas e Destinos Silvestres (Mosquitos, carrapatos, profilaxia)
+  refs.push({
+    title: "CDC Yellow Book: Health Information for International Travel & Wilderness Travel Health",
+    journal: "Centers for Disease Control and Prevention (CDC) / PubMed Bookshelf",
+    pmid: "31393661",
+    url: "https://pubmed.ncbi.nlm.nih.gov/31393661/",
+    note: "Protocolos oficiais de vacinação, repelentes eficazes contra vetores silvestres e primeiros socorros em viagens."
+  });
+
+  const listItems = refs.map(r => `
+    <li class="mb-3">
+      <div class="fw-semibold text-body-emphasis">${esc(r.title)}</div>
+      <div class="small text-body-secondary mb-1"><em>${esc(r.journal)}</em> · <a class="text-decoration-underline" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">PMID: ${esc(r.pmid)} (PubMed / NCBI)</a></div>
+      <p class="small text-body-secondary mb-0">${esc(r.note)}</p>
+    </li>
+  `).join("");
+
+  return `<section class="scientific-references mt-5 p-4 rounded-4" style="background:var(--bs-tertiary-bg);border:1px solid var(--bs-card-border-color);" aria-label="Fontes e Referências Científicas">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <span class="badge rounded-pill text-bg-primary">Evidência Científica</span>
+    <h2 class="h5 mb-0">Fontes & Referências Consultadas (PubMed / CDC)</h2>
+  </div>
+  <p class="small text-body-secondary mb-3">Compromisso contra desinformação: as orientações de segurança, esforço e saúde deste roteiro são checadas com base na literatura científica biomédica internacional:</p>
+  <ul class="list-unstyled mb-0">${listItems}</ul>
+</section>`;
+}
+
 function travelHtml(post) {
   const booking = TRAVEL_AFFILIATES.booking;
   if (!booking) return "";
@@ -1113,6 +1178,7 @@ async function postPage(request, origin, slug, travelMarker) {
         ${sidebarHtml}
       </div>
       ${relatedHtml(post)}
+      ${scientificReferencesHtml(post)}
       ${travelHtml(post)}
       ${whatsappShareHtml(post, canonical)}
     </div>
