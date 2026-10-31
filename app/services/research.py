@@ -1,7 +1,7 @@
-"""Pesquisa leve na internet (NewsAPI grátis) antes da geração de conteúdo.
+"""Pesquisa leve na internet (NewsAPI e PubMed E-utilities) antes da geração de conteúdo.
 
-Devolve trechos recentes sobre o tema, ou "" se não configurado/falhar —
-a geração nunca depende desta etapa.
+Devolve trechos recentes sobre o tema e diretrizes biomédicas de saúde/viagem,
+ou "" se não configurado/falhar — a geração nunca depende desta etapa.
 """
 import logging
 import urllib.parse
@@ -14,36 +14,66 @@ logger = logging.getLogger(__name__)
 MAX_QUERY_LEN = 120
 
 
+def research_pubmed(topic: str, limit: int = 2, timeout: float = 8.0) -> list[str]:
+    """Busca rápida no PubMed por orientações de medicina de viagem relevantes ao destino."""
+    query = f"{topic} (travel medicine OR prevention OR health risks OR altitude sickness)"
+    safe_q = urllib.parse.quote(query[:MAX_QUERY_LEN])
+    search_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={safe_q}&retmode=json&retmax={limit}"
+    results: list[str] = []
+    try:
+        search_data = http_get_json(search_url, timeout=timeout)
+        id_list = search_data.get("esearchresult", {}).get("idlist", [])
+        if not id_list:
+            return []
+        ids_str = ",".join(id_list)
+        summary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={ids_str}&retmode=json"
+        summary_data = http_get_json(summary_url, timeout=timeout)
+        result_dict = summary_data.get("result", {})
+        for pmid in id_list:
+            item = result_dict.get(pmid)
+            if item and item.get("title"):
+                title = str(item.get("title")).rstrip(".")
+                results.append(f"- [Evidência PubMed] {title}")
+    except Exception as exc:
+        logger.debug("Pesquisa PubMed silenciosamente ignorada (%s): %s", topic, exc)
+    return results
+
+
 def research(topic: str, limit: int = 6, timeout: float = 12.0) -> str:
     """Trechos em pt-BR sobre o tema, um por linha (deduplicados)."""
-    key = get_settings().news_api_key
-    if not key:
-        return ""
-
-    safe = topic.replace('"', "").strip()[:MAX_QUERY_LEN]
-    if not safe:
-        return ""
-
-    q = f'"{safe}" AND (guia OR viagem OR turismo OR dicas)'
-    url = (
-        "https://newsapi.org/v2/everything?"
-        f"q={urllib.parse.quote(q)}&language=pt&pageSize={limit}"
-        f"&sortBy=relevancy&apiKey={key}"
-    )
-    try:
-        payload = http_get_json(url, timeout=timeout)
-    except Exception as exc:
-        logger.warning("Pesquisa via NewsAPI indisponível (%s): %s", safe, exc)
-        return ""
-
     snippets: list[str] = []
     seen: set[str] = set()
-    for article in payload.get("articles", []):
-        title = str(article.get("title") or "").strip()
-        desc = str(article.get("description") or "").strip()
-        text = f"{title}. {desc}".strip() if desc else title
+
+    # 1. PubMed (E-utilities) para diretrizes de saúde/segurança em viagens (gratuito e sem chave)
+    pubmed_snippets = research_pubmed(topic, limit=2, timeout=timeout)
+    for text in pubmed_snippets:
         dedupe_key = text.lower()[:80]
-        if text and dedupe_key not in seen:
+        if dedupe_key not in seen:
             seen.add(dedupe_key)
-            snippets.append(f"- {text}")
+            snippets.append(text)
+
+    # 2. NewsAPI (opcional, se chave configurada)
+    key = get_settings().news_api_key
+    if key:
+        safe = topic.replace('"', "").strip()[:MAX_QUERY_LEN]
+        if safe:
+            q = f'"{safe}" AND (guia OR viagem OR turismo OR dicas)'
+            url = (
+                "https://newsapi.org/v2/everything?"
+                f"q={urllib.parse.quote(q)}&language=pt&pageSize={limit}"
+                f"&sortBy=relevancy&apiKey={key}"
+            )
+            try:
+                payload = http_get_json(url, timeout=timeout)
+                for article in payload.get("articles", []):
+                    title = str(article.get("title") or "").strip()
+                    desc = str(article.get("description") or "").strip()
+                    text = f"{title}. {desc}".strip() if desc else title
+                    dedupe_key = text.lower()[:80]
+                    if text and dedupe_key not in seen:
+                        seen.add(dedupe_key)
+                        snippets.append(f"- {text}")
+            except Exception as exc:
+                logger.warning("Pesquisa via NewsAPI indisponível (%s): %s", safe, exc)
+
     return "\n".join(snippets[:limit])
