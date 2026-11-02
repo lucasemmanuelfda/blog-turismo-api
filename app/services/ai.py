@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import time
 import unicodedata
@@ -9,6 +10,127 @@ from openai import OpenAI, APIConnectionError
 from app.config import get_settings
 from app.services.memory import memory
 from app.services.research import research
+
+logger = logging.getLogger(__name__)
+
+
+CONTEXTUAL_KITS: dict[str, list[dict[str, str]]] = {
+    "beach": [
+        {"name": "Sapatilha Aquática de Neoprene", "note": "Protege os pés em corais, pedras e areia quente.", "query": "sapatilha aquatica neoprene antiderrapante"},
+        {"name": "Bolsa Estanque Impermeável", "note": "Mantém celular, chaves e documentos secos em passeios de barco.", "query": "bolsa estanque impermeavel celular"},
+        {"name": "Protetor Solar Facial FPS 50+", "note": "Essencial contra insolação e queimaduras durante todo o dia.", "query": "protetor solar facial fps 50"},
+    ],
+    "trail": [
+        {"name": "Mochila de Ataque Impermeável 20L", "note": "Leve e compacta para carregar água, corta-vento e lanches.", "query": "mochila de ataque impermeavel 20l"},
+        {"name": "Garrafa Térmica em Aço Inox 750ml", "note": "Conserva água gelada por até 24 horas sob sol forte.", "query": "garrafa termica aco inox 750ml"},
+        {"name": "Bastão de Caminhada Retrátil", "note": "Reduz o impacto nos joelhos em subidas e descidas íngremes.", "query": "bastao caminhada retratil trekking"},
+    ],
+    "cold": [
+        {"name": "Segunda Pele Térmica Fleece", "note": "Camada base fundamental para reter calor corporal no frio.", "query": "segunda pele termica fleece"},
+        {"name": "Gorro e Cachecol Térmico Unissex", "note": "Protege extremidades e vias aéreas contra vento gelado.", "query": "gorro cachecol termico unissex"},
+        {"name": "Copo Térmico a Vácuo com Tampa", "note": "Mantém café, chá ou chocolate quente durante os passeios.", "query": "copo termico vacuo com tampa"},
+    ],
+    "urban": [
+        {"name": "Carregador Portátil Power Bank 20000mAh", "note": "Garante bateria extra para fotos e navegação por mapas o dia todo.", "query": "power bank 20000mah carregador portatil"},
+        {"name": "Adaptador Universal de Tomada", "note": "Evita imprevistos com padrões diferentes de tomadas e voltagens.", "query": "adaptador universal tomada usb"},
+        {"name": "Mochila Antifurto para Passeios", "note": "Segurança e conforto para transportar pertences em locais movimentados.", "query": "mochila antifurto viagem"},
+    ],
+}
+
+
+def get_contextual_kit(topic: str = "", tags: list[str] | None = None) -> list[dict[str, str]]:
+    """Gera kit contextual de viagem de acordo com o terreno e clima do destino."""
+    text = f"{topic} {' '.join(tags or [])}".lower()
+    words = set(re.findall(r"\b[a-zà-ÿ0-9]+\b", text))
+    if any(w in words for w in ("praia", "litoral", "mar", "ilha", "costa", "mergulho", "rio", "aquatico", "aquatica")):
+        return [dict(x) for x in CONTEXTUAL_KITS["beach"]]
+    if any(w in words for w in ("trilha", "serra", "montanha", "parque", "chapada", "ecoturismo", "natureza", "trekking", "cachoeira")):
+        return [dict(x) for x in CONTEXTUAL_KITS["trail"]]
+    if any(w in words for w in ("frio", "inverno", "neve", "gramado", "canela", "patagonia", "chile", "bariloche")) or "campos do jordao" in text:
+        return [dict(x) for x in CONTEXTUAL_KITS["cold"]]
+    return [dict(x) for x in CONTEXTUAL_KITS["urban"]]
+
+
+def check_quality_gate(content: str) -> dict[str, Any]:
+    """Valida requisitos de qualidade editorial E-E-A-T (tabelas e FAQ)."""
+    tables = re.findall(
+        r"(\|[^\n]+\|\n\s*\|(?:\s*:?-+:?\s*\|)+\s*\n(?:\|[^\n]+\|\s*\n?)+)",
+        content,
+    )
+    has_itinerary = False
+    has_budget = False
+    for t in tables:
+        t_lower = t.lower()
+        if any(k in t_lower for k in ("dia", "turno", "roteiro", "atrac", "atraç", "manha", "manhã", "tarde")):
+            has_itinerary = True
+        if any(k in t_lower for k in ("orcamento", "orçamento", "custo", "mochileiro", "hospedagem", "diaria", "diária", "gasto", "total")):
+            has_budget = True
+
+    faq_match = re.search(r"##\s*(?:Perguntas\s+Frequentes|FAQ)[\s\S]*?(?=\n##\s+[^\#]|\Z)", content, flags=re.IGNORECASE)
+    faq_count = 0
+    if faq_match:
+        faq_text = faq_match.group(0)
+        questions = re.findall(r"(?:###\s*|\*\*\s*)[^\n\?]+\?", faq_text)
+        faq_count = len(questions)
+
+    return {
+        "valid": bool(has_itinerary and has_budget and faq_count >= 3),
+        "has_itinerary": has_itinerary,
+        "has_budget": has_budget,
+        "has_faq": faq_count >= 3,
+        "faq_count": faq_count,
+    }
+
+
+def ensure_quality_gate(content: str, title: str = "") -> str:
+    """Garante deterministicamente que o conteúdo possui tabelas e FAQ obrigatórios."""
+    gate = check_quality_gate(content)
+    if gate["valid"]:
+        return content
+
+    pieces = [content.rstrip()]
+
+    if not gate["has_itinerary"]:
+        pieces.append("""
+## Roteiro Sintético Sugerido
+
+| Dia | Turno | Atração / Atividade | Dica Prática |
+| :--- | :--- | :--- | :--- |
+| Dia 1 | Manhã | Chegada, reconhecimento e centro histórico | Inicie cedo para evitar filas e calor |
+| Dia 1 | Tarde | Mirantes panorâmicos e principais monumentos | Momento ideal para registros fotográficos |
+| Dia 2 | Manhã | Passeios ao ar livre, praias ou trilhas naturais | Leve protetor solar, água e calçado firme |
+| Dia 2 | Tarde | Atrações culturais, museus e comércio regional | Valorize o artesanato e produtores locais |
+| Dia 3 | Manhã | Experiência gastronômica e feira tradicional | Deguste pratos e sabores autênticos |
+| Dia 3 | Tarde | Roteiro livre para compras e despedida | Guarde tempo hábil para o deslocamento |
+""".strip())
+
+    if not gate["has_budget"]:
+        pieces.append("""
+## Orçamento Estimado Médio
+
+| Perfil de Viajante | Hospedagem (diária) | Alimentação (dia) | Passeios | Total Médio / Dia |
+| :--- | :--- | :--- | :--- | :--- |
+| Mochileiro (Econômico) | R$ 100 - R$ 180 | R$ 60 - R$ 90 | R$ 40 - R$ 80 | R$ 200 - R$ 350 |
+| Conforto (Intermediário) | R$ 250 - R$ 450 | R$ 120 - R$ 200 | R$ 90 - R$ 190 | R$ 460 - R$ 840 |
+| Alto Padrão (Experiência) | R$ 600 - R$ 1.300 | R$ 260 - R$ 480 | R$ 220 - R$ 550 | R$ 1.080 - R$ 2.330 |
+""".strip())
+
+    if not gate["has_faq"]:
+        dest = title or "este destino"
+        pieces.append(f"""
+## Perguntas Frequentes (FAQ)
+
+### Qual é a melhor época para visitar {dest}?
+O período mais favorável ocorre durante a estação seca local, garantindo dias abertos para passeios e melhor aproveitamento dos atrativos.
+
+### Quantos dias são necessários para conhecer {dest}?
+Recomenda-se reservar entre 3 e 5 dias inteiros para explorar as atrações principais sem pressa e vivenciar a gastronomia típica.
+
+### Pagamentos via Pix e cartões funcionam bem na região?
+Sim, o Pix e cartões são amplamente aceitos no comércio, mas levar uma quantia reserva em espécie é sempre prudente para pequenos ambulantes e áreas afastadas.
+""".strip())
+
+    return "\n\n".join(pieces).strip()
 
 
 def _clean_kit(raw: Any) -> list[dict[str, str]]:
@@ -179,12 +301,32 @@ Estrutura obrigatória do artigo:
         )
 
         raw = response.choices[0].message.content or "{}"
-        return self._parse_json(raw)
+        data = self._parse_json(raw)
+
+        # Quality Gate E-E-A-T (tabelas de roteiro/orçamento e FAQ)
+        gate = check_quality_gate(data.get("content", ""))
+        if not gate["valid"] and provider == "auto" and self.fallback_available:
+            try:
+                fb_resp = self._create(
+                    user_prompt=user_prompt,
+                    system_prompt=self._system_prompt(lang),
+                    provider="fallback",
+                )
+                fb_raw = fb_resp.choices[0].message.content or "{}"
+                fb_data = self._parse_json(fb_raw)
+                fb_gate = check_quality_gate(fb_data.get("content", ""))
+                if fb_gate["valid"] or len(fb_data.get("content", "")) > len(data.get("content", "")):
+                    data = fb_data
+            except Exception as fb_err:
+                logger.warning("Quality fallback call failed: %s", fb_err)
+
+        data["content"] = ensure_quality_gate(data.get("content", ""), data.get("title", ""))
+        return data
 
     def generate_kit(self, topic: str) -> list[dict[str, str]]:
         """Gera 3 itens de kit recomendado para um destino, sem reescrever o artigo."""
         if not self.available:
-            return []
+            return get_contextual_kit(topic)
         prompt = (
             "Sugira 3 produtos de viagem REAIS e genéricos (sem marca, itens físicos compráveis) "
             "úteis para este tema de post de blog de turismo:\n"
@@ -199,9 +341,15 @@ Estrutura obrigatória do artigo:
                 system_prompt="Você é um consultor de compras de viagem. Responda apenas com JSON válido.",
             )
             data = json.loads(response.choices[0].message.content or "{}")
+            cleaned = _clean_kit(data.get("kit_recommendations"))
+            if len(cleaned) < 3:
+                existing_names = {k["name"].lower() for k in cleaned}
+                for item in get_contextual_kit(topic):
+                    if item["name"].lower() not in existing_names and len(cleaned) < 3:
+                        cleaned.append(item)
+            return cleaned[:3]
         except Exception:
-            return []
-        return _clean_kit(data.get("kit_recommendations"))
+            return get_contextual_kit(topic)
 
     def to_evergreen_topics(self, candidates: list[str], count: int = 12) -> list[str]:
         """Converte termos de tendência em temas de viagem evergreen."""
@@ -332,7 +480,14 @@ Estrutura obrigatória do artigo:
 
         if not isinstance(data.get("facts"), dict):
             data["facts"] = {}
-        data["kit_recommendations"] = _clean_kit(data.get("kit_recommendations"))
+        cleaned_kit = _clean_kit(data.get("kit_recommendations"))
+        if len(cleaned_kit) < 3:
+            ctx_items = get_contextual_kit(data.get("title", ""), data.get("tags", []))
+            existing_names = {k["name"].lower() for k in cleaned_kit}
+            for item in ctx_items:
+                if item["name"].lower() not in existing_names and len(cleaned_kit) < 3:
+                    cleaned_kit.append(item)
+        data["kit_recommendations"] = cleaned_kit[:3]
         if not data["content"] or len(data["content"]) < 300:
             data["content"] = self._fallback_markdown(data["title"] or "título")
         else:

@@ -1,4 +1,6 @@
 import logging
+import re
+import unicodedata
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -17,6 +19,38 @@ from app.timeutil import utcnow
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/generate", tags=["generate"])
+
+CANNIBALIZATION_STOPWORDS = {
+    "para", "como", "onde", "qual", "fazer", "melhor", "dias", "roteiro",
+    "dicas", "viagem", "guia", "tudo", "sobre", "visitar", "completo", "quando",
+}
+
+
+def _normalize_tokens(text: str) -> set[str]:
+    """Extrai conjunto de tokens significativos para cálculo de sobreposição."""
+    if not text:
+        return set()
+    cleaned = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower()
+    words = set(re.findall(r"\b[a-z]{3,}\b", cleaned))
+    return words - CANNIBALIZATION_STOPWORDS
+
+
+def find_cannibalizing_post(db: Session, topic: str, threshold: float = 0.60) -> models.Post | None:
+    """Detecta se um tema canibaliza palavras-chave de post já existente (>= 60% sobreposição)."""
+    topic_tokens = _normalize_tokens(topic)
+    if len(topic_tokens) < 2:
+        return None
+
+    posts = db.query(models.Post).filter(models.Post.status.in_(["published", "scheduled", "draft"])).all()
+    for post in posts:
+        post_tokens = _normalize_tokens(post.title) | _normalize_tokens(post.slug.replace("-", " "))
+        if len(post_tokens) < 2:
+            continue
+        common = topic_tokens & post_tokens
+        overlap = len(common) / len(topic_tokens)
+        if overlap >= threshold and len(common) >= 2:
+            return post
+    return None
 
 
 def _to_post(
@@ -68,6 +102,7 @@ def _to_post(
 def generate_post(
     request: schemas.GenerateRequest,
     provider: str = Query("auto", pattern="^(auto|primary|fallback)$"),
+    force: bool = Query(False, description="Forçar geração mesmo se houver risco de canibalização"),
     db: Session = Depends(get_db),
     _: None = Depends(require_admin),
 ):
@@ -81,6 +116,14 @@ def generate_post(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Provedor reserva (Groq) não configurado no ambiente.",
         )
+
+    if not force:
+        cannibal = find_cannibalizing_post(db, request.topic, threshold=0.60)
+        if cannibal:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Possível canibalização de palavras-chave com o post existente '{cannibal.title}'. Use force=true para prosseguir.",
+            )
 
     category_name = None
     if request.category_id:
@@ -150,10 +193,22 @@ def generate_daily(
     posts: list[models.Post] = []
     now = utcnow()
 
-    for i, topic in enumerate(topics[:limit]):
+    valid_topics: list[str] = []
+    for candidate in topics:
+        cannibal = find_cannibalizing_post(db, candidate.strip(), threshold=0.60)
+        if cannibal:
+            logger.info("Tópico '%s' ignorado por risco de canibalização com '%s'", candidate, cannibal.title)
+            continue
+        valid_topics.append(candidate.strip())
+        if len(valid_topics) >= limit:
+            break
+
+    selected_topics = valid_topics if valid_topics else [t.strip() for t in topics[:limit]]
+
+    for i, topic in enumerate(selected_topics):
         scheduled_at = now + timedelta(hours=24 + i * 6) if publish else None
         try:
-            posts.append(_to_post(db, topic.strip(), None, scheduled_at))
+            posts.append(_to_post(db, topic, None, scheduled_at))
         except Exception as exc:
             logger.warning("Falha ao gerar post para '%s': %s", topic, exc)
             continue

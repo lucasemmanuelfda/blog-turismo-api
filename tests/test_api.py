@@ -816,3 +816,107 @@ def test_is_image_url_live():
     assert not is_image_url_live("")
     assert not is_image_url_live("not-a-url")
     assert not is_image_url_live("ftp://invalid.com/img.jpg")
+
+
+def test_quality_gate_detection_and_augmentation():
+    from app.services.ai import check_quality_gate, ensure_quality_gate
+
+    incomplete_text = "# Destino Exemplo\n\nTexto informativo geral sem tabelas nem faq."
+    gate = check_quality_gate(incomplete_text)
+    assert gate["valid"] is False
+    assert gate["has_itinerary"] is False
+    assert gate["has_budget"] is False
+    assert gate["has_faq"] is False
+
+    fixed_text = ensure_quality_gate(incomplete_text, title="Destino Exemplo")
+    fixed_gate = check_quality_gate(fixed_text)
+    assert fixed_gate["valid"] is True
+    assert fixed_gate["has_itinerary"] is True
+    assert fixed_gate["has_budget"] is True
+    assert fixed_gate["has_faq"] is True
+    assert fixed_gate["faq_count"] >= 3
+
+
+def test_contextual_trip_kits():
+    from app.services.ai import get_contextual_kit
+
+    beach_kit = get_contextual_kit("Praia de Jericoacoara", ["litoral", "nordeste"])
+    assert len(beach_kit) == 3
+    assert any("neoprene" in k["query"].lower() or "aquatica" in k["query"].lower() for k in beach_kit)
+
+    trail_kit = get_contextual_kit("Trilha na Chapada Diamantina", ["ecoturismo", "montanha"])
+    assert len(trail_kit) == 3
+    assert any("mochila" in k["query"].lower() or "bastao" in k["query"].lower() for k in trail_kit)
+
+    cold_kit = get_contextual_kit("Inverno em Gramado e Canela", ["frio", "sul"])
+    assert len(cold_kit) == 3
+    assert any("termica" in k["query"].lower() or "gorro" in k["query"].lower() for k in cold_kit)
+
+    urban_kit = get_contextual_kit("Centro Histórico de São Paulo", ["cultura", "gastronomia"])
+    assert len(urban_kit) == 3
+    assert any("power bank" in k["query"].lower() or "mochila" in k["query"].lower() for k in urban_kit)
+
+
+def test_keyword_cannibalization_prevention(mocker):
+    from app.database import SessionLocal
+    from app.models import Post
+    from app.routers.generate import find_cannibalizing_post
+    from app.services import ai as ai_module
+
+    db = SessionLocal()
+    try:
+        existing = Post(
+            title="Roteiro Completo de 3 Dias em Fernando de Noronha",
+            slug="roteiro-completo-3-dias-fernando-de-noronha",
+            content="# Noronha\n\n" + ("x" * 400),
+            summary="Resumo",
+            status="published",
+        )
+        db.add(existing)
+        db.commit()
+
+        # Tema com sobreposição excessiva de palavras-chave
+        cannibal = find_cannibalizing_post(db, "Roteiro em Fernando de Noronha Dicas")
+        assert cannibal is not None
+        assert cannibal.id == existing.id
+
+        # Tema com palavras distintas não deve canibalizar
+        different = find_cannibalizing_post(db, "Mergulho e Vida Marinha em Alagoas")
+        assert different is None
+
+        # Testa endpoint HTTP /generate/post rejeitando com 409
+        mocker.patch.object(
+            ai_module.ai_service, "settings", SimpleNamespace(ai_api_key="k", ai_model="m")
+        )
+        r = client.post(
+            "/generate/post",
+            json={"topic": "Roteiro em Fernando de Noronha Dicas"},
+            headers={"Authorization": "Bearer teste123"},
+        )
+        assert r.status_code == 409
+        assert "canibalização" in r.json()["detail"].lower()
+
+        # Com force=True, deve permitir a geração
+        fake_post = {
+            "title": "Novo Post de Noronha",
+            "meta_title": "Noronha",
+            "meta_description": "desc",
+            "summary": "resumo",
+            "content": "# Noronha\n\n" + ("y" * 400),
+            "keywords": ["noronha"],
+            "tags": ["praia"],
+            "image_prompt": "noronha",
+        }
+        mocker.patch.object(ai_module.ai_service, "generate_travel_post", return_value=fake_post)
+        r_forced = client.post(
+            "/generate/post?force=true",
+            json={"topic": "Roteiro em Fernando de Noronha Dicas"},
+            headers={"Authorization": "Bearer teste123"},
+        )
+        assert r_forced.status_code == 201
+
+    finally:
+        db.rollback()
+        db.query(Post).filter(Post.slug.like("%noronha%")).delete()
+        db.commit()
+        db.close()
