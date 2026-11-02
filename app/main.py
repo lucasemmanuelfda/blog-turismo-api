@@ -1,4 +1,5 @@
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, status
@@ -72,10 +73,17 @@ def health():
 
 @app.api_route("/health/ready", methods=["GET", "HEAD"])
 def health_ready():
+    start = time.perf_counter()
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return {"status": "ready", "database": "connected"}
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        return {
+            "status": "ready",
+            "database": "connected",
+            "latency_ms": latency_ms,
+            "version": app.version,
+        }
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

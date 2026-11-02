@@ -49,6 +49,18 @@ def test_health():
     assert r_root.status_code == 200
 
 
+def test_health_ready():
+    r = client.get("/health/ready")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "ready"
+    assert data["database"] == "connected"
+    assert "latency_ms" in data
+    assert "version" in data
+    r_head = client.head("/health/ready")
+    assert r_head.status_code == 200
+
+
 def test_post_crud():
     r = client.post(
         "/categories",
