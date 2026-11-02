@@ -144,7 +144,7 @@ def list_posts(
     limit: int = 20,
     offset: int = 0,
 ) -> Sequence[models.Post]:
-    if status is not None and status not in ("draft", "published"):
+    if status is not None and status not in ("draft", "scheduled", "published"):
         return []
     stmt = (
         select(models.Post)
@@ -154,11 +154,12 @@ def list_posts(
         stmt = stmt.where(models.Post.status == status)
     if category:
         stmt = stmt.where(models.Post.category.has(models.Category.slug == category))
-    order = (
-        models.Post.published_at.desc().nulls_last()
-        if status == "published"
-        else models.Post.created_at.desc()
-    )
+    if status == "published":
+        order = models.Post.published_at.desc().nulls_last()
+    elif status == "scheduled":
+        order = models.Post.scheduled_at.asc().nulls_last()
+    else:
+        order = models.Post.created_at.desc()
     return db.scalars(
         stmt.order_by(order, models.Post.id.desc()).limit(limit).offset(offset)
     ).all()

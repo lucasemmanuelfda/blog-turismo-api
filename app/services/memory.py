@@ -10,6 +10,7 @@ from app.timeutil import utcnow
 
 MAX_FACTS_KEPT = 20
 MAX_FACTS_IN_PROMPT = 5
+SETTING_KEY = "blog_memory"
 
 
 class MemoryManager:
@@ -20,6 +21,18 @@ class MemoryManager:
         self._load()
 
     def _load(self) -> None:
+        try:
+            from app.database import SessionLocal
+            from app.models import AppSetting
+
+            with SessionLocal() as db:
+                row = db.get(AppSetting, SETTING_KEY)
+                if row and row.value:
+                    self.data = json.loads(row.value)
+                    return
+        except Exception:
+            pass
+
         try:
             with open(self.path, encoding="utf-8") as f:
                 self.data = json.load(f)
@@ -35,6 +48,21 @@ class MemoryManager:
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=1)
             os.replace(tmp_path, self.path)
+
+            try:
+                from app.database import SessionLocal
+                from app.models import AppSetting
+
+                with SessionLocal() as db:
+                    row = db.get(AppSetting, SETTING_KEY)
+                    val = json.dumps(self.data, ensure_ascii=False)
+                    if row:
+                        row.value = val
+                    else:
+                        db.add(AppSetting(key=SETTING_KEY, value=val))
+                    db.commit()
+            except Exception:
+                pass
 
     def _key(self, topic: str) -> str:
         words = topic.lower().replace("-", " ").split()

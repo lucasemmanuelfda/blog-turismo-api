@@ -24,13 +24,23 @@ def _image_keyword(post: models.Post) -> str:
 
 @router.get("", response_model=list[schemas.PostRead])
 def list_posts(
-    status_f: str | None = Query(default=None, alias="status", pattern="^(draft|published)$"),
+    status_f: str | None = Query(default=None, alias="status", pattern="^(draft|scheduled|published)$"),
     category: str | None = None,
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     return crud.list_posts(db, status=status_f, category=category, limit=limit, offset=offset)
+
+
+@router.post("/publish-due", response_model=dict)
+def publish_due(
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+):
+    """Publica todos os posts agendados cuja data já expirou."""
+    count = crud.publish_due_posts(db)
+    return {"published": count}
 
 
 @router.post("/relink", response_model=dict)
