@@ -9,6 +9,7 @@ Uso:
     python -m app.cli stats
     python -m app.cli publish-due
     python -m app.cli relink
+    python -m app.cli cleanup
     python -m app.cli generate "Roteiro em Bonito MS"
     python -m app.cli daily
     python -m app.cli serve
@@ -146,6 +147,15 @@ def cmd_relink():
     print(f"Posts atualizados com temas correlacionados: {changed}")
 
 
+def cmd_cleanup(days: int = 30):
+    """Remove rascunhos obsoletos e redirecionamentos orfaos."""
+    with SessionLocal() as db:
+        drafts = crud.cleanup_stale_drafts(db, older_than_days=days)
+        redirects = crud.cleanup_orphaned_redirects(db)
+    print(f"[OK] Rascunhos obsoletos removidos (>{days} dias): {drafts}")
+    print(f"[OK] Redirecionamentos orfaos removidos: {redirects}")
+
+
 def cmd_generate(topic: str, category_name: str | None = None):
     """Gera um artigo usando o servico de IA."""
     from app.routers.generate import _to_post
@@ -258,6 +268,10 @@ def main():
     # refresh-all-images
     subparsers.add_parser("refresh-all-images", help="Atualiza fotos e atribuicoes de todos os posts")
 
+    # cleanup
+    cleanup_parser = subparsers.add_parser("cleanup", help="Remove rascunhos obsoletos e redirecionamentos orfaos")
+    cleanup_parser.add_argument("--days", type=int, default=30, help="Remover rascunhos com mais de N dias (padrao: 30)")
+
     args = parser.parse_args()
 
     if args.command == "test-connections":
@@ -270,6 +284,8 @@ def main():
         cmd_publish_due()
     elif args.command == "relink":
         cmd_relink()
+    elif args.command == "cleanup":
+        cmd_cleanup(args.days)
     elif args.command == "generate":
         cmd_generate(args.topic, args.category)
     elif args.command == "daily":

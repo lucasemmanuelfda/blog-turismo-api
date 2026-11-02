@@ -86,3 +86,83 @@ def test_memory_persistence_in_database(tmp_path):
     # 3. Cria nova instância da memória simulando reinício do app
     mem2 = MemoryManager(path=str(tmp_path / "another-path.json"))
     assert "noronha" in mem2.context_block("Fernando de Noronha").lower()
+
+
+def test_cleanup_stale_drafts():
+    with SessionLocal() as db:
+        now = utcnow()
+        # Rascunho velho (> 30 dias)
+        draft_old = crud.create_post(
+            db,
+            schemas.PostCreate(
+                title="Rascunho Esquecido Antigo",
+                summary="Resumo",
+                content="Conteudo",
+                status="draft",
+            ),
+        )
+        draft_old.created_at = now - timedelta(days=45)
+
+        # Rascunho recente (< 30 dias)
+        draft_recent = crud.create_post(
+            db,
+            schemas.PostCreate(
+                title="Rascunho Recente",
+                summary="Resumo",
+                content="Conteudo",
+                status="draft",
+            ),
+        )
+        draft_recent.created_at = now - timedelta(days=2)
+
+        # Post publicado antigo (não deve ser deletado)
+        published_old = crud.create_post(
+            db,
+            schemas.PostCreate(
+                title="Post Publicado Antigo",
+                summary="Resumo",
+                content="Conteudo",
+                status="published",
+            ),
+        )
+        published_old.created_at = now - timedelta(days=60)
+        db.commit()
+
+        # Executa limpeza de rascunhos com mais de 30 dias
+        deleted = crud.cleanup_stale_drafts(db, older_than_days=30)
+        assert deleted == 1
+
+        # Rascunho recente e post publicado devem continuar intactos
+        assert crud.get_post(db, draft_recent.id) is not None
+        assert crud.get_post(db, published_old.id) is not None
+        # Rascunho velho foi deletado
+        assert crud.get_post(db, draft_old.id) is None
+
+
+def test_cleanup_orphaned_redirects():
+    with SessionLocal() as db:
+        from app.models import PostRedirect
+        # 1. Cria post com redirecionamento valido
+        post = crud.create_post(
+            db,
+            schemas.PostCreate(
+                title="Destino com Redirect",
+                summary="Resumo",
+                content="Conteudo",
+                status="published",
+            ),
+        )
+        valid_redirect = PostRedirect(old_slug="antigo-destino-valido", post_id=post.id)
+        # Redirecionamento órfão (post_id inexistente)
+        orphaned_redirect = PostRedirect(old_slug="antigo-destino-orfao", post_id=999999)
+        db.add_all([valid_redirect, orphaned_redirect])
+        db.commit()
+
+        # Executa limpeza de redirecionamentos órfãos
+        cleaned = crud.cleanup_orphaned_redirects(db)
+        assert cleaned == 1
+
+        # Valida que o válido permaneceu e o órfão foi removido
+        remaining_slugs = [r.old_slug for r in db.query(PostRedirect).all()]
+        assert "antigo-destino-valido" in remaining_slugs
+        assert "antigo-destino-orfao" not in remaining_slugs

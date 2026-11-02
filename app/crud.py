@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Sequence
 
 from sqlalchemy import delete, or_, select, update
@@ -280,3 +280,28 @@ def delete_post(db: Session, post_id: int) -> bool:
 
 def generate_slug(db: Session, title: str) -> str:
     return unique_slug(title, _all_post_slugs(db))
+
+
+def cleanup_stale_drafts(db: Session, older_than_days: int = 30) -> int:
+    """Remove rascunhos com data de criação anterior ao período estipulado."""
+    cutoff = utcnow() - timedelta(days=older_than_days)
+    query = (
+        select(models.Post)
+        .where(models.Post.status == "draft")
+        .where(models.Post.created_at < cutoff)
+    )
+    drafts = list(db.scalars(query).all())
+    count = 0
+    for draft in drafts:
+        if delete_post(db, draft.id):
+            count += 1
+    return count
+
+
+def cleanup_orphaned_redirects(db: Session) -> int:
+    """Remove redirecionamentos cujo post de destino não existe mais."""
+    subq = select(models.Post.id)
+    stmt = delete(models.PostRedirect).where(~models.PostRedirect.post_id.in_(subq))
+    result = db.execute(stmt)
+    db.commit()
+    return result.rowcount or 0

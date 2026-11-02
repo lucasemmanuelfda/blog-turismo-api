@@ -52,6 +52,18 @@ def relink_posts(
     return {"related": crud.backfill_related_posts(db)}
 
 
+@router.post("/cleanup", response_model=dict)
+def cleanup_posts(
+    days: int = Query(default=30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    _: None = Depends(require_admin),
+):
+    """Remove rascunhos obsoletos e redirecionamentos órfãos."""
+    stale_drafts = crud.cleanup_stale_drafts(db, older_than_days=days)
+    orphaned_redirects = crud.cleanup_orphaned_redirects(db)
+    return {"stale_drafts": stale_drafts, "orphaned_redirects": orphaned_redirects}
+
+
 @router.get("/{slug_or_id}", response_model=schemas.PostRead)
 def get_post(slug_or_id: str, response: Response, db: Session = Depends(get_db)):
     is_redirect = False
