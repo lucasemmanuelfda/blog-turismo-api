@@ -283,6 +283,8 @@ async function run() {
   const rob = await robRes.text();
   check("robots user-agent", rob.includes("User-agent: *"));
   check("robots sitemap", rob.includes("Sitemap: " + SITE + "/sitemap.xml"));
+  check("robots cache 1 dia", (robRes.headers.get("Cache-Control") || "").includes("max-age=86400"));
+  check("robots content-type", (robRes.headers.get("Content-Type") || "").includes("text/plain"));
 
   // verificação do Google Search Console (URL prefix / arquivo HTML)
   const gFile = "googlea1b2c3d4e5f6a7b8.html";

@@ -1561,7 +1561,12 @@ async function handleRoute(request, env, ctx, url, path, origin, method) {
 Allow: /
 Sitemap: ${origin}/sitemap.xml
 `;
-      return new Response(body, { headers: secured({ "Content-Type": "text/plain; charset=utf-8" }) });
+      return new Response(body, {
+        headers: secured({
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "public, max-age=86400, s-maxage=86400",
+        }),
+      });
     }
 
     // Páginas institucionais
