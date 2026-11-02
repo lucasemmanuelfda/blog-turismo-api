@@ -472,6 +472,7 @@ def test_research_returns_empty_when_no_key(mocker):
     from app.services.research import research
 
     mocker.patch.object(get_settings(), "news_api_key", "")
+    mocker.patch("app.services.research.research_pubmed", return_value=[])
     assert research("bonito") == ""
 
 

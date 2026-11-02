@@ -1,6 +1,8 @@
 import logging
 import re
+import urllib.error
 import urllib.parse
+import urllib.request
 from functools import lru_cache
 from urllib.parse import quote
 
@@ -144,7 +146,8 @@ _STOPWORDS_DESTINO = {
     "guia", "roteiro", "dicas", "melhor", "melhores", "como", "onde", "quando", "ir",
     "viagem", "destinos", "sobre", "visitar", "fazer", "dias", "turismo", "ecoturismo",
     "completo", "completa", "pratico", "pratica", "primeira", "expedicao", "expedição",
-    "alem", "além", "para", "sua", "pelo", "pela", "tudo", "vale", "pena", "passeio", "passeios"
+    "alem", "além", "para", "sua", "pelo", "pela", "tudo", "vale", "pena", "passeio", "passeios",
+    "definitivo", "definitiva", "atualizado", "atualizada"
 }
 
 
