@@ -286,6 +286,13 @@ async function run() {
   check("robots cache 1 dia", (robRes.headers.get("Cache-Control") || "").includes("max-age=86400"));
   check("robots content-type", (robRes.headers.get("Content-Type") || "").includes("text/plain"));
 
+  // llms.txt
+  const llmRes = await worker.fetch({ url: SITE + "/llms.txt" }, {}, {});
+  const llm = await llmRes.text();
+  check("llms.txt status 200", llmRes.status === 200);
+  check("llms.txt cache 5 min", (llmRes.headers.get("Cache-Control") || "").includes("max-age=300"));
+  check("llms.txt content", llm.includes("# Blog Turismo"));
+
   // verificação do Google Search Console (URL prefix / arquivo HTML)
   const gFile = "googlea1b2c3d4e5f6a7b8.html";
   const gRes = await worker.fetch({ url: SITE + "/" + gFile }, { GOOGLE_VERIFICATION_FILE: gFile }, {});

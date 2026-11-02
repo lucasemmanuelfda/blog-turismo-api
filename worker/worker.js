@@ -1585,7 +1585,7 @@ Sitemap: ${origin}/sitemap.xml
         // lista parcial se API indisponível
       }
       const body = `# Blog Turismo\n\n> ${DEFAULT_DESC}\n\n## Sobre\n\n- [Sobre](${origin}/sobre)\n- [Privacidade](${origin}/privacidade)\n\n## Artigos\n\n${links}\n`;
-      return new Response(body, { headers: secured({ "Content-Type": "text/markdown; charset=utf-8" }) });
+      return new Response(body, { headers: secured({ "Content-Type": "text/markdown; charset=utf-8", ...PUB_CACHE }) });
     }
 
     // Sitemap.xml — gerado dinamicamente a partir dos posts publicados
