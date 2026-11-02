@@ -84,21 +84,42 @@ class TrendService:
         return out
 
     def _google_trends(self, country: str, n: int) -> list[str]:
-        """Consultas relacionadas (em alta) a viagens no Google Trends."""
+        """Consultas relacionadas (em alta) a viagens no Google Trends com backoff e cabeçalhos realistas."""
         try:
             from pytrends.request import TrendReq
 
-            pt = TrendReq(hl="pt-BR", tz=180, timeout=(5, 12), retries=1, backoff_factor=0.5)
-            pt.build_payload(kw_list=["viagem turismo"], timeframe="today 1-m", geo=country)
+            pt = TrendReq(
+                hl="pt-BR",
+                tz=180,
+                timeout=(5, 12),
+                retries=2,
+                backoff_factor=0.8,
+                requests_args={
+                    "headers": {
+                        "User-Agent": (
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/122.0.0.0 Safari/537.36"
+                        )
+                    }
+                },
+            )
             queries: list[str] = []
-            for frame in pt.related_queries().values():
-                if frame is None:
-                    continue
-                for col in ("rising", "top"):
-                    data = frame.get(col)
-                    if data is not None and not data.empty:
-                        queries.extend(str(q) for q in data["query"].tolist())
-                    break
+            for kw in ("viagem turismo", "viagem"):
+                try:
+                    pt.build_payload(kw_list=[kw], timeframe="today 1-m", geo=country)
+                    frames = pt.related_queries().values()
+                    for frame in frames:
+                        if frame is None:
+                            continue
+                        for col in ("rising", "top"):
+                            data = frame.get(col)
+                            if data is not None and not data.empty:
+                                queries.extend(str(q) for q in data["query"].tolist())
+                    if queries:
+                        break
+                except Exception as kw_err:
+                    logger.debug("Tentativa com kw '%s' falhou: %s", kw, kw_err)
             return self._dedupe(queries)[:n]
         except Exception as exc:
             logger.warning("Google Trends indisponível: %s", exc)
