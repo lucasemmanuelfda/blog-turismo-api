@@ -14,11 +14,17 @@ logger = logging.getLogger(__name__)
 MAX_QUERY_LEN = 120
 
 
-def research_pubmed(topic: str, limit: int = 2, timeout: float = 8.0) -> list[str]:
+def research_pubmed(topic: str, limit: int = 2, timeout: float = 4.0) -> list[str]:
     """Busca rápida no PubMed por orientações de medicina de viagem relevantes ao destino."""
-    query = f"{topic} (travel medicine OR prevention OR health risks OR altitude sickness)"
+    clean_topic = (topic or "").strip()
+    if not clean_topic:
+        return []
+    query = f"{clean_topic} (travel medicine OR prevention OR health risks OR altitude sickness)"
     safe_q = urllib.parse.quote(query[:MAX_QUERY_LEN])
-    search_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={safe_q}&retmode=json&retmax={limit}"
+    search_url = (
+        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?"
+        f"db=pubmed&term={safe_q}&retmode=json&retmax={limit}&tool=blog-turismo"
+    )
     results: list[str] = []
     try:
         search_data = http_get_json(search_url, timeout=timeout)
@@ -26,7 +32,10 @@ def research_pubmed(topic: str, limit: int = 2, timeout: float = 8.0) -> list[st
         if not id_list:
             return []
         ids_str = ",".join(id_list)
-        summary_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={ids_str}&retmode=json"
+        summary_url = (
+            f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?"
+            f"db=pubmed&id={ids_str}&retmode=json&tool=blog-turismo"
+        )
         summary_data = http_get_json(summary_url, timeout=timeout)
         result_dict = summary_data.get("result", {})
         for pmid in id_list:
@@ -44,8 +53,8 @@ def research(topic: str, limit: int = 6, timeout: float = 12.0) -> str:
     snippets: list[str] = []
     seen: set[str] = set()
 
-    # 1. PubMed (E-utilities) para diretrizes de saúde/segurança em viagens (gratuito e sem chave)
-    pubmed_snippets = research_pubmed(topic, limit=2, timeout=timeout)
+    # 1. PubMed (E-utilities) para diretrizes de saúde/segurança em viagens (máximo 4s para não travar a geração)
+    pubmed_snippets = research_pubmed(topic, limit=2, timeout=min(timeout, 4.0))
     for text in pubmed_snippets:
         dedupe_key = text.lower()[:80]
         if dedupe_key not in seen:

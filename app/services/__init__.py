@@ -4,8 +4,16 @@ import unicodedata
 import urllib.request
 
 
+DEFAULT_HEADERS = {
+    "User-Agent": "BlogTurismoAPI/1.0 (+https://github.com/lucasemmanuelfda/blog-turismo-api)"
+}
+
+
 def http_get_json(url: str, timeout: float, headers: dict[str, str] | None = None):
-    request = urllib.request.Request(url, headers=headers or {})
+    h = dict(DEFAULT_HEADERS)
+    if headers:
+        h.update(headers)
+    request = urllib.request.Request(url, headers=h)
     with urllib.request.urlopen(request, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 
