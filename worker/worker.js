@@ -804,7 +804,12 @@ async function fetchAllPosts() {
 async function fetchPost(slug) {
   const u = `${API_BASE_URL}/posts/${encodeURIComponent(slug)}`;
   const res = await fetchWithRetry(u, { headers: { Accept: "application/json" } });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    if ([502, 503, 504].includes(res.status)) {
+      throw new Error("API Cold Start: " + res.status);
+    }
+    return null;
+  }
   const canonicalSlug = res.headers && typeof res.headers.get === "function" ? res.headers.get("X-Canonical-Slug") : null;
   const data = await res.json();
   if (canonicalSlug && canonicalSlug !== slug) {
@@ -994,8 +999,8 @@ ${nav.length ? `<nav class="d-flex gap-2 justify-content-center mt-5" aria-label
 
 const AMAZON_TAG = "blogturismo20-20";
 
-// Afiliados de viagem. Deixe vazio para ocultar o bloco. Exportado para os testes
-// injetarem IDs temporários (em produção, preencha aqui e faça o deploy).
+// Afiliados de viagem opcionais (deixe vazio para ocultar).
+// Exportado para testes injetarem IDs temporários caso configurados.
 export const TRAVEL_AFFILIATES = { travelpayouts: "", booking: "" };
 
 // E-mail público de contato (LGPD / dúvidas). Preencha para exibir o link.
@@ -1040,7 +1045,7 @@ function privacidadePage(origin) {
 <h2>Análises</h2>
 <p>Podemos usar estatísticas de acesso agregadas e sem cookies para entender quais conteúdos são úteis. Esses dados não identificam você individualmente.</p>
 <h2>Links de afiliado</h2>
-<p>Alguns links levam a lojas e serviços parceiros (como Amazon e Booking.com). Ao comprar ou reservar por eles, o blog pode receber uma comissão <strong>sem nenhum custo adicional para você</strong>. O preço e as condições são os mesmos.</p>
+<p>Alguns links levam a lojas e serviços parceiros (como Amazon). Ao comprar ou reservar por eles, o blog pode receber uma comissão <strong>sem nenhum custo adicional para você</strong>. O preço e as condições são os mesmos.</p>
 <h2>Seus direitos (LGPD)</h2>
 <p>Como não coletamos dados pessoais de visitantes, normalmente não há dados a excluir. Ainda assim, você pode solicitar informações. ${contactLine()}</p>
 <p>Última atualização: ${new Date().toISOString().slice(0, 10)}.</p>`;
@@ -1794,17 +1799,19 @@ export default {
     const method = (request.method || "GET").toUpperCase();
 
     // Cache Edge da Cloudflare para rotas públicas GET
-    const CACHE_VERSION = "v5";
+    const CACHE_VERSION = "v6";
     const isAdmin = path === ADMIN_ROOT || path.startsWith(ADMIN_ROOT + "/");
     const isCacheable = method === "GET" && !isAdmin && !path.startsWith("/admin");
     const edgeCache = (typeof caches !== "undefined" && caches && caches.default) ? caches.default : null;
     let cacheKey = null;
+    let fallbackKey = null;
 
     if (isCacheable && edgeCache) {
       try {
         const cacheUrl = new URL(url.toString());
         cacheUrl.searchParams.set("__cv", CACHE_VERSION);
         cacheKey = new Request(cacheUrl.toString(), request);
+        fallbackKey = new Request(cacheUrl.toString() + "&__snap=1", request);
         const cached = await edgeCache.match(cacheKey);
         if (cached) {
           return cached;
@@ -1812,11 +1819,43 @@ export default {
       } catch (_) {}
     }
 
-    const res = await handleRoute(request, env, ctx, url, path, origin, method);
+    let res;
+    try {
+      res = await handleRoute(request, env, ctx, url, path, origin, method);
+    } catch (err) {
+      if (isCacheable && edgeCache && fallbackKey) {
+        try {
+          const stale = await edgeCache.match(fallbackKey);
+          if (stale) {
+            const staleHeaders = new Headers(stale.headers);
+            staleHeaders.set("X-Cache", "STALE");
+            return new Response(stale.body, { status: 200, headers: staleHeaders });
+          }
+        } catch (_) {}
+      }
+      throw err;
+    }
+
+    if (isCacheable && edgeCache && fallbackKey && res && [502, 503, 504].includes(res.status)) {
+      try {
+        const stale = await edgeCache.match(fallbackKey);
+        if (stale) {
+          const staleHeaders = new Headers(stale.headers);
+          staleHeaders.set("X-Cache", "STALE");
+          return new Response(stale.body, { status: 200, headers: staleHeaders });
+        }
+      } catch (_) {}
+    }
 
     if (isCacheable && edgeCache && cacheKey && res && res.status === 200) {
       try {
         ctx?.waitUntil?.(edgeCache.put(cacheKey, res.clone()));
+        if (fallbackKey) {
+          const snapHeaders = new Headers(res.headers);
+          snapHeaders.set("Cache-Control", "public, max-age=604800, s-maxage=604800");
+          const snapRes = new Response(res.clone().body, { status: 200, headers: snapHeaders });
+          ctx?.waitUntil?.(edgeCache.put(fallbackKey, snapRes));
+        }
       } catch (_) {}
     }
     return res;

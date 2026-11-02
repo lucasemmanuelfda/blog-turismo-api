@@ -423,6 +423,44 @@ async function run() {
   const logoutRes = await worker.fetch(new Request(SITE + ADMIN_ROOT + "/logout", { method: "POST" }), {}, {});
   check("admin logout 302", logoutRes.status === 302);
 
+  // Teste de resiliência de borda: Fallback stale-while-revalidate no cold start do Render
+  const cacheStore = new Map();
+  const mockCache = {
+    async match(req) {
+      const u = typeof req === "string" ? req : req.url;
+      const hit = cacheStore.get(u);
+      return hit ? hit.clone() : null;
+    },
+    async put(req, res) {
+      const u = typeof req === "string" ? req : req.url;
+      cacheStore.set(u, res.clone());
+    },
+  };
+  globalThis.caches = { default: mockCache };
+
+  const ctxMock = { waitUntil(p) { return p; } };
+  // 1. Acesso normal grava em cache e snapshot
+  const okRes = await worker.fetch(new Request(SITE + "/post/roteiro-de-3-dias-em-gramado/"), {}, ctxMock);
+  check("edge cache primeira carga 200", okRes.status === 200);
+
+  // 2. Simula expiração do cache primário, mantendo apenas o snapshot de segurança
+  const snapKey = [...cacheStore.keys()].find(k => k.includes("__snap=1"));
+  const snapVal = cacheStore.get(snapKey);
+  cacheStore.clear();
+  if (snapKey && snapVal) cacheStore.set(snapKey, snapVal);
+
+  // 3. Simula falha/cold start da API externa (502 Gateway Timeout)
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({ detail: "Render cold start" }, 502);
+
+  const staleRes = await worker.fetch(new Request(SITE + "/post/roteiro-de-3-dias-em-gramado/"), {}, ctxMock);
+  check("edge cold start fallback status 200", staleRes.status === 200);
+  check("edge cold start header stale", staleRes.headers.get("X-Cache") === "STALE");
+
+  // Restaura ambiente
+  globalThis.fetch = originalFetch;
+  delete globalThis.caches;
+
   process.exit(failures ? 1 : 0);
 }
 

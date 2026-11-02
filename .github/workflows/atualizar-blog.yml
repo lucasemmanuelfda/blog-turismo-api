@@ -47,6 +47,13 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.ADMIN_KEY }}" \
             -w "\nHTTP %{http_code}\n"
 
+      - name: Limpar rascunhos obsoletos e redirecionamentos orfaos (higiene de banco)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.content }}
+        run: |
+          curl -sS -X POST "${{ vars.API_URL }}/posts/cleanup?days=30" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_KEY }}" \
+            -w "\nHTTP %{http_code}\n"
+
       - uses: actions/checkout@v4
 
       - name: Autenticar no Google (Indexing API)
