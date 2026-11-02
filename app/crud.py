@@ -265,6 +265,12 @@ def update_post(db: Session, post_id: int, data: schemas.PostUpdate) -> models.P
 def delete_post(db: Session, post_id: int) -> bool:
     post = db.get(models.Post, post_id)
     if post:
+        # Desvincula posts que tinham este como post relacionado para evitar violação de FK
+        db.execute(
+            update(models.Post)
+            .where(models.Post.related_post_id == post_id)
+            .values(related_post_id=None)
+        )
         db.execute(delete(models.PostRedirect).where(models.PostRedirect.post_id == post_id))
         db.delete(post)
         db.commit()
