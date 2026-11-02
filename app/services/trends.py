@@ -35,6 +35,9 @@ SEED_TOPICS = [
 ]
 
 
+TRENDS_SETTING_KEY = "trends_cache_data"
+
+
 class TrendService:
     def __init__(self, path: str | None = None) -> None:
         self.path = path or get_settings().topics_cache_file
@@ -43,6 +46,18 @@ class TrendService:
         self._load()
 
     def _load(self) -> None:
+        try:
+            from app.database import SessionLocal
+            from app.models import AppSetting
+
+            with SessionLocal() as db:
+                row = db.get(AppSetting, TRENDS_SETTING_KEY)
+                if row and row.value:
+                    self.data = json.loads(row.value)
+                    return
+        except Exception:
+            pass
+
         try:
             with open(self.path, encoding="utf-8") as f:
                 self.data = json.load(f)
@@ -71,6 +86,21 @@ class TrendService:
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=1)
             os.replace(tmp_path, self.path)
+
+            try:
+                from app.database import SessionLocal
+                from app.models import AppSetting
+
+                with SessionLocal() as db:
+                    row = db.get(AppSetting, TRENDS_SETTING_KEY)
+                    val = json.dumps(self.data, ensure_ascii=False)
+                    if row:
+                        row.value = val
+                    else:
+                        db.add(AppSetting(key=TRENDS_SETTING_KEY, value=val))
+                    db.commit()
+            except Exception:
+                pass
 
     @staticmethod
     def _dedupe(items: list[str], max_keys: int = 4) -> list[str]:

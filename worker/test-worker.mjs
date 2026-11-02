@@ -11,7 +11,7 @@ function fakePost(now = new Date().toISOString()) {
     slug: "roteiro-de-3-dias-em-gramado",
     summary: "O que fazer e onde comer em Gramado.",
     content:
-      "## Por que visitar\n\n**Gramado** é linda.\n\n- Ver o Natal Luz\n- Provar fondue\n\n![Natal Luz](https://thumb.wikimedia.org/t1.jpg?utm_source=commons.wikimedia.org)\n\n### Dicas\n\nVeja [mais](https://exemplo.com/outro).\n\n1. Primeiro\n2. Segundo\n\n## Quando ir\n\nA melhor época é no inverno.\n\n| Dia | Atração |\n| :--- | :--- |\n| Dia 1 | Lago Negro |\n",
+      "## Por que visitar\n\n**Gramado** é linda.\n\n- Ver o Natal Luz\n- Provar fondue\n\n![Natal Luz](https://thumb.wikimedia.org/t1.jpg?utm_source=commons.wikimedia.org)\n\n### Dicas\n\nVeja [mais](https://exemplo.com/outro).\n\n1. Primeiro\n2. Segundo\n\n## Quando ir\n\nA melhor época é no inverno.\n\n| Dia | Atração |\n| :--- | :--- |\n| Dia 1 | Lago Negro |\n\n## Perguntas Frequentes (FAQ)\n\n### Qual a melhor época para ir?\nA melhor época para visitar Gramado é no inverno entre maio e agosto.\n\n### Quantos dias ficar?\nRecomendamos pelo menos três dias completos para aproveitar o roteiro.\n",
     cover_image: "https://thumb.wikimedia.org/t2.jpg?utm_source=x",
     status: "published",
     published_at: now,
@@ -211,6 +211,9 @@ async function run() {
   check("post figure img", /<figure class="img"><img src="https:\/\/thumb\.wikimedia\.org\/t1\.jpg"/.test(post));
   check("post imagem cai query utm", !post.includes("utm_source"));
   check("post JSON-LD BlogPosting", post.includes('"@type":"BlogPosting"'));
+  check("post JSON-LD FAQPage", post.includes('"@type":"FAQPage"') && post.includes("Qual a melhor época para ir?"));
+  check("post JSON-LD author Person", post.includes('"@type":"Person"') && post.includes("Lucas Emmanuel"));
+  check("post JSON-LD breadcrumb tag", post.includes('/tag/gramado/'));
   check("post h1", post.includes('<h1 class="h2 mb-4">Roteiro de 3 Dias em Gramado</h1>'));
   check("post volta ao blog", /\<li class="breadcrumb-item"\><a href="\/">Início<\/a>\<\/li\>/.test(post));
   check("post breadcrumb atual", post.includes('aria-current="page">Roteiro de 3 Dias em Gramado</li>'));

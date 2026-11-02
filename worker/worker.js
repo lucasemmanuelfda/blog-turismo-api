@@ -650,46 +650,114 @@ function blogJsonLd(origin = SITE_ORIGIN) {
   });
 }
 
+function extractFaqJsonLd(content) {
+  if (!content) return null;
+  const faqMatch = content.match(/##\s+(?:Perguntas\s+Frequentes(?:\s*\(FAQ\))?|FAQ)[\s\S]*?(?=\n##\s+|\n---|$)/i);
+  if (!faqMatch) return null;
+  const section = faqMatch[0];
+  const items = [];
+  const regex = /(?:###|\*\*)\s*(?:\d+[\.\)]\s*)?([^\n?*#]+\?)\s*(?:\*\*)?\n+([\s\S]*?)(?=(?:\n+(?:###|\*\*)\s*(?:\d+[\.\)]\s*)?[^\n?*#]+\?|\n##\s+|$))/g;
+  let m;
+  while ((m = regex.exec(section)) !== null && items.length < 10) {
+    const question = m[1].replace(/[*#_]/g, "").trim();
+    const answer = m[2].replace(/[*#_\[\]]/g, "").replace(/\n+/g, " ").trim();
+    if (question.length > 5 && answer.length > 5) {
+      items.push({
+        "@type": "Question",
+        "name": question,
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": answer,
+        },
+      });
+    }
+  }
+  if (!items.length) return null;
+  return {
+    "@type": "FAQPage",
+    "mainEntity": items,
+  };
+}
+
 function postJsonLd(a, origin = SITE_ORIGIN) {
+  const breadcrumbItems = [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Início",
+      "item": `${origin}/`,
+    },
+  ];
+
+  if (Array.isArray(a.tags) && a.tags.length > 0) {
+    const mainTag = String(a.tags[0]).trim();
+    if (mainTag) {
+      breadcrumbItems.push({
+        "@type": "ListItem",
+        "position": 2,
+        "name": mainTag,
+        "item": `${origin}/tag/${encodeURIComponent(mainTag.toLowerCase())}/`,
+      });
+      breadcrumbItems.push({
+        "@type": "ListItem",
+        "position": 3,
+        "name": a.title,
+        "item": `${origin}/post/${a.slug}/`,
+      });
+    } else {
+      breadcrumbItems.push({
+        "@type": "ListItem",
+        "position": 2,
+        "name": a.title,
+        "item": `${origin}/post/${a.slug}/`,
+      });
+    }
+  } else {
+    breadcrumbItems.push({
+      "@type": "ListItem",
+      "position": 2,
+      "name": a.title,
+      "item": `${origin}/post/${a.slug}/`,
+    });
+  }
+
+  const graph = [
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": breadcrumbItems,
+    },
+    {
+      "@type": "BlogPosting",
+      "headline": a.title,
+      "description": a.summary || a.meta_description,
+      "image": a.cover_image ? cleanImageUrl(a.cover_image) : undefined,
+      "datePublished": a.published_at,
+      "dateModified": a.updated_at || a.published_at,
+      "inLanguage": "pt-BR",
+      "wordCount": a.content ? a.content.split(/\s+/).length : undefined,
+      "keywords": (a.tags || []).map((tag) => String(tag).trim()).filter(Boolean).join(", ") || undefined,
+      "mainEntityOfPage": { "@type": "WebPage", "@id": `${origin}/post/${a.slug}/` },
+      "author": {
+        "@type": "Person",
+        "name": "Lucas Emmanuel",
+        "url": `${origin}/sobre`,
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Blog Turismo",
+        "logo": { "@type": "ImageObject", "url": `${origin}/favicon.svg` }
+      }
+    }
+  ];
+
+  const faqLd = extractFaqJsonLd(a.content);
+  if (faqLd) {
+    graph.push(faqLd);
+  }
+
   return JSON.stringify({
     "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "BreadcrumbList",
-        "itemListElement": [
-          {
-            "@type": "ListItem",
-            "position": 1,
-            "name": "Início",
-            "item": `${origin}/`
-          },
-          {
-            "@type": "ListItem",
-            "position": 2,
-            "name": a.title,
-            "item": `${origin}/post/${a.slug}/`
-          }
-        ]
-      },
-      {
-        "@type": "BlogPosting",
-        "headline": a.title,
-        "description": a.summary || a.meta_description,
-        "image": a.cover_image ? cleanImageUrl(a.cover_image) : undefined,
-        "datePublished": a.published_at,
-        "dateModified": a.updated_at || a.published_at,
-        "inLanguage": "pt-BR",
-        "wordCount": a.content ? a.content.split(/\s+/).length : undefined,
-        "keywords": (a.tags || []).map((tag) => String(tag).trim()).filter(Boolean).join(", ") || undefined,
-        "mainEntityOfPage": { "@type": "WebPage", "@id": `${origin}/post/${a.slug}/` },
-        "author": { "@type": "Organization", "name": "Blog Turismo" },
-        "publisher": {
-          "@type": "Organization",
-          "name": "Blog Turismo",
-          "logo": { "@type": "ImageObject", "url": `${origin}/favicon.svg` }
-        }
-      }
-    ]
+    "@graph": graph,
   });
 }
 

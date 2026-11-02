@@ -47,3 +47,26 @@ def test_google_trends_fallback_keyword_when_first_empty(tmp_path):
         results = svc._google_trends("BR", n=5)
         assert len(results) == 1
         assert "campos do jordao no inverno" in results
+
+
+def test_trends_database_persistence(tmp_path):
+    from app.database import Base, SessionLocal, engine
+    from app.models import AppSetting
+    from app.services.trends import TRENDS_SETTING_KEY
+
+    Base.metadata.create_all(bind=engine)
+    p = str(tmp_path / "trends.json")
+    svc = TrendService(path=p)
+    svc.data["2026-11-02"] = ["destinos nordeste", "trilhas minas"]
+    svc._save()
+
+    with SessionLocal() as db:
+        row = db.get(AppSetting, TRENDS_SETTING_KEY)
+        assert row is not None
+        assert "destinos nordeste" in row.value
+
+    # Simula reinício sem o arquivo local
+    svc2 = TrendService(path=str(tmp_path / "inexistente.json"))
+    assert "2026-11-02" in svc2.data
+    assert "destinos nordeste" in svc2.data["2026-11-02"]
+
