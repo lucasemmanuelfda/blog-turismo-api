@@ -10,6 +10,7 @@ from app.timeutil import utcnow
 
 MAX_FACTS_KEPT = 20
 MAX_FACTS_IN_PROMPT = 5
+MAX_TOPICS_KEPT = 25
 SETTING_KEY = "blog_memory"
 
 
@@ -39,10 +40,24 @@ class MemoryManager:
         except (FileNotFoundError, ValueError, json.JSONDecodeError):
             self.data = {"topics": {}}
 
+    def _purge_old_topics(self) -> None:
+        """Mantém apenas os tópicos mais recentes para evitar inchaço no payload JSON."""
+        topics = self.data.get("topics", {})
+        if len(topics) <= MAX_TOPICS_KEPT:
+            return
+        def _latest_when(slot: dict) -> str:
+            titles = slot.get("titles", [])
+            return titles[-1].get("when", "") if titles else ""
+        sorted_keys = sorted(topics.keys(), key=lambda k: _latest_when(topics.get(k, {})))
+        to_remove = sorted_keys[:-MAX_TOPICS_KEPT]
+        for k in to_remove:
+            topics.pop(k, None)
+
     def _save(self) -> None:
         parent = os.path.dirname(self.path)
         if parent:
             os.makedirs(parent, exist_ok=True)
+        self._purge_old_topics()
         tmp_path = f"{self.path}.tmp"
         with self._lock:
             with open(tmp_path, "w", encoding="utf-8") as f:

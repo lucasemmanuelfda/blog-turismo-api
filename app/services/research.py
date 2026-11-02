@@ -4,6 +4,7 @@ Devolve trechos recentes sobre o tema e diretrizes biomédicas de saúde/viagem,
 ou "" se não configurado/falhar — a geração nunca depende desta etapa.
 """
 import logging
+import re
 import urllib.parse
 
 from app.config import get_settings
@@ -14,12 +15,24 @@ logger = logging.getLogger(__name__)
 MAX_QUERY_LEN = 120
 
 
-def research_pubmed(topic: str, limit: int = 2, timeout: float = 4.0) -> list[str]:
+def research_pubmed(topic: str, tags: list[str] | None = None, limit: int = 2, timeout: float = 4.0) -> list[str]:
     """Busca rápida no PubMed por orientações de medicina de viagem relevantes ao destino."""
     clean_topic = (topic or "").strip()
     if not clean_topic:
         return []
-    query = f"{clean_topic} (travel medicine OR prevention OR health risks OR altitude sickness)"
+
+    text = f"{clean_topic} {' '.join(tags or [])}".lower()
+    words = set(re.findall(r"\b[a-zà-ÿ0-9]+\b", text))
+    if any(w in words for w in ("trilha", "serra", "montanha", "altitude", "trekking", "escalada", "chapada")):
+        context_terms = "altitude sickness OR hypothermia OR prevention"
+    elif any(w in words for w in ("praia", "litoral", "mar", "mergulho", "ilha", "costa")):
+        context_terms = "marine stings OR sun protection OR decompression sickness"
+    elif any(w in words for w in ("floresta", "amazonia", "pantanal", "ecoturismo", "selva", "rio")):
+        context_terms = "malaria prevention OR yellow fever OR insect repellent"
+    else:
+        context_terms = "prevention OR health risks"
+
+    query = f"{clean_topic} (travel medicine OR {context_terms})"
     safe_q = urllib.parse.quote(query[:MAX_QUERY_LEN])
     search_url = (
         f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?"
@@ -48,13 +61,13 @@ def research_pubmed(topic: str, limit: int = 2, timeout: float = 4.0) -> list[st
     return results
 
 
-def research(topic: str, limit: int = 6, timeout: float = 12.0) -> str:
+def research(topic: str, tags: list[str] | None = None, limit: int = 6, timeout: float = 12.0) -> str:
     """Trechos em pt-BR sobre o tema, um por linha (deduplicados)."""
     snippets: list[str] = []
     seen: set[str] = set()
 
     # 1. PubMed (E-utilities) para diretrizes de saúde/segurança em viagens (máximo 4s para não travar a geração)
-    pubmed_snippets = research_pubmed(topic, limit=2, timeout=min(timeout, 4.0))
+    pubmed_snippets = research_pubmed(topic, tags=tags, limit=2, timeout=min(timeout, 4.0))
     for text in pubmed_snippets:
         dedupe_key = text.lower()[:80]
         if dedupe_key not in seen:

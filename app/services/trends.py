@@ -34,6 +34,60 @@ SEED_TOPICS = [
     "petrópolis serra fluminense",
 ]
 
+SEASONAL_TOPICS: dict[str, list[str]] = {
+    # Verão (Dezembro a Março): litoral, praias, mergulho e ecoturismo aquático
+    "summer": [
+        "melhores praias de alagoas",
+        "roteiro maragogi e sao miguel dos milagres",
+        "mergulho em arraial do cabo rj",
+        "praias desertas em ubatuba",
+        "roteiro em ilhabela sp",
+        "florianopolis no verao praias e trilhas",
+        "porto de galinhas e carneiros pe",
+    ],
+    # Outono (Abril a Junho): clima ameno, cidades históricas, águas cristalinas e vinícolas
+    "autumn": [
+        "cidades historicas de minas gerais tiradentes e ouro preto",
+        "vale dos vinhedos serra gaucha no outono",
+        "roteiro em bonito ms flutuacao e grutas",
+        "chapada diamantina bahia trilhas e cachoeiras",
+        "paraty e trindade rj centro historico e praias",
+        "petropolis serra fluminense gastronomia e historia",
+    ],
+    # Inverno (Julho a Agosto): serra, montanha, lareira, fondue e frio
+    "winter": [
+        "gramado e canela no inverno dicas e passeios",
+        "campos do jordao sp roteiro de inverno",
+        "monte verde mg gastronomia e montanha",
+        "urubici e sao joaquim sc serra catarinense",
+        "visconde de maua rj e mg gastronomia e cachoeiras",
+        "serra negra e circuito das aguas paulista",
+    ],
+    # Primavera (Setembro a Novembro): flores, cachoeiras cheias, cerrado e amazônia
+    "spring": [
+        "chapada dos veadeiros goias cachoeiras e trilhas",
+        "foz do iguacu pr cataratas e compras",
+        "jalapao tocantins fervedouros e dunas",
+        "ecoturismo em manaus e floresta amazonica",
+        "lencois maranhenses melhores lagoas",
+        "serra da canastra mg nascente do sao francisco",
+    ],
+}
+
+
+def get_seasonal_topics(month: int | None = None) -> list[str]:
+    """Retorna tópicos sazonais adequados ao mês do ano (hemisfério sul)."""
+    m = month if month is not None else date.today().month
+    if m in (12, 1, 2, 3):
+        season = "summer"
+    elif m in (4, 5, 6):
+        season = "autumn"
+    elif m in (7, 8):
+        season = "winter"
+    else:
+        season = "spring"
+    return list(SEASONAL_TOPICS.get(season, []))
+
 
 TRENDS_SETTING_KEY = "trends_cache_data"
 
@@ -189,7 +243,8 @@ class TrendService:
         candidates = self._google_trends(settings.trends_country, n=n)
         if not candidates:
             candidates = self._news(n)
-        candidates = self._dedupe(candidates + SEED_TOPICS)
+        seasonal = get_seasonal_topics()
+        candidates = self._dedupe(candidates + seasonal + SEED_TOPICS)
         self.data[key] = candidates
         self._save()
         return candidates

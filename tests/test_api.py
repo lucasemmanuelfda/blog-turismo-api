@@ -920,3 +920,64 @@ def test_keyword_cannibalization_prevention(mocker):
         db.query(Post).filter(Post.slug.like("%noronha%")).delete()
         db.commit()
         db.close()
+
+
+def test_seasonal_travel_topics():
+    from app.services.trends import get_seasonal_topics
+
+    summer = get_seasonal_topics(1)
+    assert any("praias" in t or "maragogi" in t or "verao" in t for t in summer)
+
+    autumn = get_seasonal_topics(5)
+    assert any("historicas" in t or "vinhedos" in t or "bonito" in t for t in autumn)
+
+    winter = get_seasonal_topics(7)
+    assert any("gramado" in t or "campos do jordao" in t or "inverno" in t for t in winter)
+
+    spring = get_seasonal_topics(10)
+    assert any("veadeiros" in t or "iguacu" in t or "jalapao" in t for t in spring)
+
+
+def test_biome_contextualized_pubmed(mocker):
+    from app.services import research as research_module
+
+    captured_urls = []
+
+    def fake_http_get_json(url, timeout=4.0):
+        captured_urls.append(url)
+        return {"esearchresult": {"idlist": []}}
+
+    mocker.patch.object(research_module, "http_get_json", side_effect=fake_http_get_json)
+
+    # Trilha/montanha deve focar em altitude e hipotermia
+    research_module.research_pubmed("Serra da Mantiqueira", ["montanha", "trilha"])
+    assert len(captured_urls) == 1
+    assert "altitude" in captured_urls[0].lower() or "hypothermia" in captured_urls[0].lower()
+
+    # Praia/mergulho deve focar em mar e descompressao/afogamento
+    research_module.research_pubmed("Fernando de Noronha", ["praia", "mergulho"])
+    assert len(captured_urls) == 2
+    assert "marine" in captured_urls[1].lower() or "decompression" in captured_urls[1].lower()
+
+
+def test_memory_topics_purge(tmp_path):
+    from app.services.memory import MemoryManager, MAX_TOPICS_KEPT
+
+    mem = MemoryManager(path=str(tmp_path / "memory.json"))
+    mem.data = {"topics": {}}
+    # Cria 35 tópicos artificiais com datas sequenciais
+    for i in range(35):
+        key = f"topico {i}"
+        mem.data["topics"][key] = {
+            "titles": [{"title": f"Titulo {i}", "slug": f"slug-{i}", "when": f"2026-01-{i+1:02d}T10:00:00"}],
+            "facts": [],
+            "category": None,
+        }
+
+    assert len(mem.data["topics"]) == 35
+    mem._purge_old_topics()
+    assert len(mem.data["topics"]) == MAX_TOPICS_KEPT
+    # Os tópicos mais recentes (índices 10 a 34) devem ser preservados
+    assert "topico 34" in mem.data["topics"]
+    assert "topico 0" not in mem.data["topics"]
+
